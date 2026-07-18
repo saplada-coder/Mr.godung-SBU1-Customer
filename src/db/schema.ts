@@ -17,7 +17,7 @@ import { relations } from 'drizzle-orm'
 export const buEnum = pgEnum('bu', ['BU1', 'BU2', 'BU3', 'BU4', 'BU5', 'BU6', 'BU7'])
 export const channelEnum = pgEnum('channel', ['FB : Mr.โกดัง', 'Line OA', 'โทร', 'MD', 'อื่นๆ'])
 export const apptTypeEnum = pgEnum('appt_type', ['zoom', 'site'])
-export const roleEnum = pgEnum('role', ['admin', 'sales', 'viewer'])
+export const roleEnum = pgEnum('role', ['owner', 'admin', 'sales', 'viewer'])
 
 /**
  * สถานะติดตาม/ใบเสนอราคา เก็บเป็น varchar (ไม่ใช่ pg enum) เพราะ enum label ของ Postgres

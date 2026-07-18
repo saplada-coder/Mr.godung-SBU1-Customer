@@ -4,7 +4,7 @@ import { getDb } from '@/db'
 import { buRates } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
 import { getRates } from '@/lib/rates'
-import { BUS } from '@/lib/constants'
+import { BUS, isAdminUp } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +17,7 @@ export async function GET() {
 export async function PUT(req: Request) {
   const me = await getSessionUser()
   if (!me) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  if (me.role !== 'admin') return NextResponse.json({ error: 'เฉพาะแอดมินที่แก้เรตได้' }, { status: 403 })
+  if (!isAdminUp(me.role)) return NextResponse.json({ error: 'เฉพาะเจ้าของ/ผู้ดูแลระบบที่แก้เรตได้' }, { status: 403 })
 
   const b = await req.json()
   const rates: Record<string, number> = b.rates ?? {}

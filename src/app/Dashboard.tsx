@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { UserButton } from '@clerk/nextjs'
 import {
   BUS, BU_NAMES, STAGES, LEAD_STATUSES, QUOTES, QUOTE_STATUSES, CHANNELS, CATS, PROVINCES,
-  DEFAULT_RATES, ROLE_LABEL, canEdit, isFinal, stMeta, qMeta, ST_APPT, ST_NEW, type Role,
+  DEFAULT_RATES, ROLES, ROLE_LABEL, canEdit, canManageUsers, isAdminUp, isFinal, stMeta, qMeta, ST_APPT, ST_NEW, type Role,
 } from '@/lib/constants'
 import { commas, fmtB, Mv, TH_MONTHS, DAY, toMs, toStr, weekStart, thDate, daysBetween, fmtPhone } from '@/lib/format'
 
@@ -20,8 +20,8 @@ export type Rec = {
 }
 type Meta = { updated: string; ref: string; refLabel: string; targetYear: string; targetTotal: number; quarters: { q: string; target: number }[] }
 type Me = { id: number; email: string; name: string | null; image: string | null; role: Role; bu: string | null }
-type View = 'overview' | 'alerts' | 'intake' | 'regions' | 'customers'
-const TITLES: Record<View, string> = { overview: 'ภาพรวม', alerts: 'แจ้งเตือน', intake: 'ลูกค้าเข้าใหม่', regions: 'ภูมิภาค (BU)', customers: 'รายการลูกค้า' }
+type View = 'overview' | 'alerts' | 'intake' | 'regions' | 'customers' | 'users'
+const TITLES: Record<View, string> = { overview: 'ภาพรวม', alerts: 'แจ้งเตือน', intake: 'ลูกค้าเข้าใหม่', regions: 'ภูมิภาค (BU)', customers: 'รายการลูกค้า', users: 'จัดการผู้ใช้' }
 const REF = () => toMs('2026-07-15') // อ้างอิงข้อมูลล่าสุด
 const NOW = () => Date.UTC(2026, 6, 17)
 
@@ -93,7 +93,7 @@ export default function Dashboard({ me }: { me: Me }) {
     <div className={'app' + (navOpen ? ' nav-open' : '')}>
       <Sidebar me={me} view={view} records={records}
         onNav={(v) => { setView(v); setNavOpen(false); window.scrollTo(0, 0) }}
-        onRates={me.role === 'admin' ? () => { setRatesOpen(true); setNavOpen(false) } : undefined} />
+        onRates={isAdminUp(me.role) ? () => { setRatesOpen(true); setNavOpen(false) } : undefined} />
       {navOpen && <div className="backdrop" onClick={() => setNavOpen(false)} />}
 
       <div className="main">
@@ -112,6 +112,7 @@ export default function Dashboard({ me }: { me: Me }) {
           {view === 'alerts' && <Alerts records={records} onManage={setManage} />}
           {view === 'intake' && <Intake records={records} />}
           {view === 'regions' && <Regions records={records} />}
+          {view === 'users' && canManageUsers(me.role) && <UsersView me={me} showToast={showToast} />}
           {view === 'customers' && (
             <Customers records={records} editable={editable} onManage={setManage} onAdd={() => setAddOpen(true)}
               patch={async (id, body) => { const r = await fetch(`/api/customers/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); if (r.ok) { showToast('อัปเดตแล้ว'); load() } else showToast((await r.json()).error || 'ผิดพลาด') }} />
@@ -152,6 +153,7 @@ function Sidebar({ me, view, records, onNav, onRates }: {
         {item('intake', 'ลูกค้าเข้าใหม่', <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="9" cy="7" r="3.4" /><path d="M2.5 20v-1.6a4 4 0 014-4h5a4 4 0 014 4V20" /><path d="M18 7.5v5M20.5 10h-5" /></svg>)}
         {item('regions', 'ภูมิภาค (BU)', <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 6l6-2 4 2 6-2v14l-6 2-4-2-6 2z" /><path d="M10 4v14M14 6v14" /></svg>)}
         {item('customers', 'รายการลูกค้า', <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 5h18M3 12h18M3 19h18" /></svg>, <span className="badge">{commas(records.length)}</span>)}
+        {canManageUsers(me.role) && item('users', 'จัดการผู้ใช้', <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="9" cy="7" r="3.4" /><path d="M2.5 20v-1.6a4 4 0 014-4h5a4 4 0 014 4V20" /><circle cx="17.5" cy="14.5" r="2.2" /><path d="M17.5 10.8v1.5M17.5 16.7v1.5M14.3 14.5h1.5M19.2 14.5h1.5" /></svg>)}
       </nav>
       <div className="sb-foot">
         {onRates && (
@@ -568,6 +570,161 @@ function Customers({ records, editable, onManage, onAdd, patch }: {
         </>
       )}
     </>
+  )
+}
+
+/* ---------------- Users management ---------------- */
+type AppUser = { id: number; email: string; name: string | null; image: string | null; role: Role; bu: string | null; active: boolean; invited: boolean }
+type Invite = { id: string; email: string; createdAt: number }
+function UsersView({ me, showToast }: { me: Me; showToast: (m: string) => void }) {
+  const [data, setData] = useState<{ users: AppUser[]; invitations: Invite[]; hasOwner: boolean } | null>(null)
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [pwUser, setPwUser] = useState<AppUser | null>(null)
+
+  const load = useCallback(async () => {
+    const r = await fetch('/api/users', { cache: 'no-store' })
+    if (r.ok) setData(await r.json())
+    else showToast('โหลดรายชื่อผู้ใช้ไม่สำเร็จ')
+  }, [showToast])
+  useEffect(() => { load() }, [load])
+
+  const patch = async (id: number, body: Record<string, unknown>, okMsg: string) => {
+    const r = await fetch(`/api/users/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    if (r.ok) { showToast(okMsg); load() } else showToast((await r.json()).error || 'ผิดพลาด')
+  }
+  const revoke = async (invId: string) => {
+    const r = await fetch(`/api/users/${invId}`, { method: 'DELETE' })
+    if (r.ok) { showToast('ยกเลิกคำเชิญแล้ว'); load() } else showToast((await r.json()).error || 'ผิดพลาด')
+  }
+
+  if (!data) return <div className="empty">กำลังโหลดรายชื่อผู้ใช้…</div>
+  const isOwner = me.role === 'owner'
+  // แก้บทบาท: เจ้าของแก้ได้ทุกคน (ยกเว้นตัวเอง) · ผู้ดูแลระบบแก้ได้ทุกคนยกเว้นเจ้าของและตัวเอง
+  const canEditRow = (u: AppUser) => u.id !== me.id && (isOwner || u.role !== 'owner')
+  const roleOpts = ROLES.filter((r) => r !== 'owner' || isOwner)
+
+  const statusChip = (u: AppUser) => {
+    if (!u.active) return <span className="qchip" style={{ color: '#b0281c', background: '#f4dbd7', cursor: 'default' }}>ระงับ</span>
+    if (u.invited && !u.image && !u.name) return <span className="qchip" style={{ color: '#b58600', background: '#fbeec0', cursor: 'default' }}>รอตอบรับคำเชิญ</span>
+    return <span className="qchip" style={{ color: '#3f8f3a', background: '#dcedd2', cursor: 'default' }}>ใช้งาน</span>
+  }
+
+  return (
+    <>
+      <div className="view-head">
+        <div><h1>จัดการผู้ใช้</h1><p>เชิญผู้ใช้ทางอีเมล — ผู้ถูกเชิญกดลิงก์ในอีเมลเพื่อสมัครและตั้งรหัสผ่านเอง · เจ้าของ/ผู้ดูแลระบบตั้งรหัสผ่านใหม่ให้ได้เสมอ</p></div>
+        <button className="btn btn-primary" onClick={() => setInviteOpen(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}><path d="M12 5v14M5 12h14" /></svg>เชิญผู้ใช้</button>
+      </div>
+      <div className="tscroll">
+        <table style={{ minWidth: 760 }}>
+          <thead><tr><th>ผู้ใช้</th><th>บทบาท</th><th>BU ที่ดูแล</th><th>สถานะ</th><th className="act" /></tr></thead>
+          <tbody>
+            {data.users.map((u) => (
+              <tr key={u.id}>
+                <td className="name">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {u.image && <img src={u.image} alt="" style={{ width: 26, height: 26, borderRadius: '50%', verticalAlign: 'middle', marginRight: 8 }} />}
+                  {u.name || <span style={{ color: 'var(--text-faint)' }}>(ยังไม่ระบุชื่อ)</span>}
+                  <span style={{ color: 'var(--text-dim)', fontSize: 12, marginLeft: 8 }}>{u.email}</span>
+                  {u.id === me.id && <span className="tag-new">ตัวเอง</span>}
+                </td>
+                <td>
+                  {canEditRow(u)
+                    ? <select value={u.role} onChange={(e) => patch(u.id, { role: e.target.value }, 'เปลี่ยนบทบาทแล้ว')}>{roleOpts.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}</select>
+                    : ROLE_LABEL[u.role]}
+                </td>
+                <td>
+                  {canEditRow(u) || u.id === me.id
+                    ? <select value={u.bu || ''} onChange={(e) => patch(u.id, { bu: e.target.value || null }, 'อัปเดต BU แล้ว')}><option value="">ทุก BU</option>{BUS.map((b) => <option key={b} value={b}>{BU_NAMES[b]}</option>)}</select>
+                    : (u.bu ? BU_NAMES[u.bu as keyof typeof BU_NAMES] : 'ทุก BU')}
+                </td>
+                <td>{statusChip(u)}</td>
+                <td className="act" style={{ whiteSpace: 'nowrap' }}>
+                  {(isOwner || u.role !== 'owner' || u.id === me.id) && <button className="row-btn" onClick={() => setPwUser(u)}>ตั้งรหัสผ่าน</button>}
+                  {canEditRow(u) && <button className="row-btn" style={{ marginLeft: 6, color: u.active ? '#b0281c' : '#3f8f3a' }} onClick={() => patch(u.id, { active: !u.active }, u.active ? 'ระงับบัญชีแล้ว' : 'เปิดใช้งานแล้ว')}>{u.active ? 'ระงับ' : 'เปิดใช้'}</button>}
+                </td>
+              </tr>
+            ))}
+            {data.invitations.map((i) => (
+              <tr key={i.id}>
+                <td className="name"><span style={{ color: 'var(--text-dim)' }}>{i.email}</span></td>
+                <td style={{ color: 'var(--text-faint)' }}>—</td>
+                <td style={{ color: 'var(--text-faint)' }}>—</td>
+                <td><span className="qchip" style={{ color: '#b58600', background: '#fbeec0', cursor: 'default' }}>รอตอบรับคำเชิญ</span></td>
+                <td className="act"><button className="row-btn" style={{ color: '#b0281c' }} onClick={() => revoke(i.id)}>ยกเลิกคำเชิญ</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="foot-note">ผู้ถูกเชิญจะได้รับอีเมลพร้อมลิงก์สมัครใช้งาน (ตั้งรหัสผ่านเองได้) · &quot;ตั้งรหัสผ่าน&quot; ใช้ได้หลังผู้ใช้ตอบรับคำเชิญแล้ว · การระงับบัญชีมีผลทันทีที่ผู้ใช้รีเฟรชหน้า</p>
+      {inviteOpen && <InviteModal isOwner={isOwner} onClose={() => setInviteOpen(false)} onSaved={() => { setInviteOpen(false); load() }} showToast={showToast} />}
+      {pwUser && <PasswordModal user={pwUser} onClose={() => setPwUser(null)} onSaved={() => setPwUser(null)} showToast={showToast} />}
+    </>
+  )
+}
+function InviteModal({ isOwner, onClose, onSaved, showToast }: { isOwner: boolean; onClose: () => void; onSaved: () => void; showToast: (m: string) => void }) {
+  const [email, setEmail] = useState('')
+  const [role, setRole] = useState<string>('sales')
+  const [bu, setBu] = useState('')
+  const [busy, setBusy] = useState(false)
+  const save = async () => {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { showToast('กรอกอีเมลให้ถูกต้อง'); return }
+    setBusy(true)
+    const r = await fetch('/api/users', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: email.trim(), role, bu: bu || null }) })
+    setBusy(false)
+    if (r.ok) { showToast('ส่งคำเชิญไปที่ ' + email.trim() + ' แล้ว'); onSaved() } else showToast((await r.json()).error || 'ส่งคำเชิญไม่สำเร็จ')
+  }
+  return (
+    <div className="modal-bd" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="modal" role="dialog" aria-modal style={{ maxWidth: 440 }}>
+        <div className="modal-h"><h3>เชิญผู้ใช้ใหม่</h3><button className="modal-x" onClick={onClose}>×</button></div>
+        <div className="form">
+          <div className="field full"><label>อีเมล *</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" autoFocus /></div>
+          <div className="field"><label>บทบาท</label><select value={role} onChange={(e) => setRole(e.target.value)}>{ROLES.filter((r) => r !== 'owner' || isOwner).map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}</select></div>
+          <div className="field"><label>BU ที่ดูแล</label><select value={bu} onChange={(e) => setBu(e.target.value)}><option value="">ทุก BU</option>{BUS.map((b) => <option key={b} value={b}>{BU_NAMES[b]}</option>)}</select></div>
+          <div className="field full"><div className="hintline">ระบบจะส่งอีเมลพร้อมลิงก์ให้ผู้ใช้สมัครและ<b>ตั้งรหัสผ่านด้วยตัวเอง</b> — บทบาทที่เลือกจะมีผลทันทีที่เข้าระบบครั้งแรก</div></div>
+        </div>
+        <div className="modal-f"><button className="btn" onClick={onClose}>ยกเลิก</button><button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? 'กำลังส่ง…' : 'ส่งคำเชิญ'}</button></div>
+      </div>
+    </div>
+  )
+}
+function PasswordModal({ user, onClose, onSaved, showToast }: { user: AppUser; onClose: () => void; onSaved: () => void; showToast: (m: string) => void }) {
+  const [pw, setPw] = useState('')
+  const [pw2, setPw2] = useState('')
+  const [show, setShow] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const gen = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+    const arr = new Uint32Array(12); crypto.getRandomValues(arr)
+    const p = Array.from(arr, (n) => chars[n % chars.length]).join('')
+    setPw(p); setPw2(p); setShow(true)
+  }
+  const save = async () => {
+    if (pw.length < 8) { showToast('รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร'); return }
+    if (pw !== pw2) { showToast('รหัสผ่านทั้งสองช่องไม่ตรงกัน'); return }
+    setBusy(true)
+    const r = await fetch(`/api/users/${user.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: pw }) })
+    setBusy(false)
+    if (r.ok) { showToast('ตั้งรหัสผ่านใหม่แล้ว'); onSaved() } else showToast((await r.json()).error || 'ตั้งรหัสผ่านไม่สำเร็จ')
+  }
+  return (
+    <div className="modal-bd" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="modal" role="dialog" aria-modal style={{ maxWidth: 440 }}>
+        <div className="modal-h"><div><h3>ตั้งรหัสผ่านใหม่</h3><div className="sub">{user.name || user.email}</div></div><button className="modal-x" onClick={onClose}>×</button></div>
+        <div className="form">
+          <div className="field full"><label>รหัสผ่านใหม่ (อย่างน้อย 8 ตัวอักษร)</label><input type={show ? 'text' : 'password'} value={pw} onChange={(e) => setPw(e.target.value)} autoFocus /></div>
+          <div className="field full"><label>ยืนยันรหัสผ่านใหม่</label><input type={show ? 'text' : 'password'} value={pw2} onChange={(e) => setPw2(e.target.value)} /></div>
+          <div className="field full" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <button type="button" className="btn" onClick={gen}>สุ่มรหัสผ่าน</button>
+            <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" checked={show} onChange={(e) => setShow(e.target.checked)} />แสดงรหัสผ่าน</label>
+          </div>
+          <div className="field full"><div className="hintline">ตั้งแล้วผู้ใช้จะถูกออกจากระบบทุกอุปกรณ์ และต้องเข้าสู่ระบบด้วยรหัสใหม่ — อย่าลืมส่งรหัสให้ผู้ใช้ทางช่องทางที่ปลอดภัย</div></div>
+        </div>
+        <div className="modal-f"><button className="btn" onClick={onClose}>ยกเลิก</button><button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? 'กำลังบันทึก…' : 'ตั้งรหัสผ่าน'}</button></div>
+      </div>
+    </div>
   )
 }
 

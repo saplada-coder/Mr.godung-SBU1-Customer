@@ -5,7 +5,7 @@ import { customers, appointments, notes, activityLog } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
 import { getRates } from '@/lib/rates'
 import { estimate } from '@/lib/serialize'
-import { canEdit, isFinal, LEAD_STATUSES, QUOTE_STATUSES, CHANNELS, ST_APPT } from '@/lib/constants'
+import { canEdit, isAdminUp, isFinal, LEAD_STATUSES, QUOTE_STATUSES, CHANNELS, ST_APPT } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
@@ -98,7 +98,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const me = await getSessionUser()
   if (!me) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  if (me.role !== 'admin') return NextResponse.json({ error: 'เฉพาะแอดมินที่ลบได้' }, { status: 403 })
+  if (!isAdminUp(me.role)) return NextResponse.json({ error: 'เฉพาะเจ้าของ/ผู้ดูแลระบบที่ลบได้' }, { status: 403 })
   const id = Number((await ctx.params).id)
   const db = getDb()
   const [cur] = await db.select().from(customers).where(eq(customers.id, id)).limit(1)

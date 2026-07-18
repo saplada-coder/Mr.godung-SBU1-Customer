@@ -11,12 +11,14 @@ export type SessionUser = {
   image: string | null
   role: Role
   bu: string | null
+  active: boolean
 }
 
 /**
  * อ่านผู้ใช้ปัจจุบันจาก Clerk แล้ว sync เข้า users table.
- * - ถ้ายังไม่มี admin เลย → คนแรกที่ล็อกอินกลายเป็น admin (bootstrap)
- * - นอกนั้น default = viewer (แอดมินค่อยเลื่อนสิทธิ์ทีหลัง)
+ * - ถ้ายังไม่มี owner/admin เลย → คนแรกที่ล็อกอินกลายเป็น owner (bootstrap)
+ * - นอกนั้น default = viewer (เจ้าของ/แอดมินค่อยเลื่อนสิทธิ์ หรือกำหนดตอนเชิญ)
+ * - บัญชีที่ถูกระงับ (active=false) ยังได้ค่ากลับไป — ผู้เรียกต้องเช็ค active เอง
  */
 export async function getSessionUser(): Promise<SessionUser | null> {
   const { userId } = await auth()
@@ -36,15 +38,15 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     if (u.name !== name || u.image !== image) {
       await db.update(users).set({ name, image }).where(eq(users.id, u.id))
     }
-    return { id: u.id, email: u.email, name, image, role: u.role as Role, bu: u.bu }
+    return { id: u.id, email: u.email, name, image, role: u.role as Role, bu: u.bu, active: u.active }
   }
 
   const [{ n: adminCount }] = (await db
     .select({ n: sql<number>`count(*)::int` })
     .from(users)
-    .where(eq(users.role, 'admin'))) as unknown as [{ n: number }]
-  const role: Role = adminCount === 0 ? 'admin' : 'viewer'
+    .where(sql`${users.role} in ('owner', 'admin')`)) as unknown as [{ n: number }]
+  const role: Role = adminCount === 0 ? 'owner' : 'viewer'
 
   const [created] = await db.insert(users).values({ email, name, image, role }).returning()
-  return { id: created.id, email: created.email, name, image, role, bu: created.bu }
+  return { id: created.id, email: created.email, name, image, role, bu: created.bu, active: created.active }
 }

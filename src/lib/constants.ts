@@ -60,14 +60,19 @@ export const stMeta = (s: string) =>
   STAGES.find((x) => x.k === s) ?? { k: s, c: '#5f6b76', b: '#e9ebee', g: 'อื่นๆ' }
 export const qMeta = (q: string) => QUOTES.find((x) => x.k === q) ?? QUOTES[0]
 
-export const ROLES = ['admin', 'sales', 'viewer'] as const
+export const ROLES = ['owner', 'admin', 'sales', 'viewer'] as const
 export type Role = (typeof ROLES)[number]
 export const ROLE_LABEL: Record<Role, string> = {
-  admin: 'แอดมิน',
+  owner: 'เจ้าของ',
+  admin: 'ผู้ดูแลระบบ',
   sales: 'ประสานงานขาย',
   viewer: 'ผู้บริหาร (ดูอย่างเดียว)',
 }
-export const canEdit = (role: Role) => role === 'admin' || role === 'sales'
+export const canEdit = (role: Role) => role === 'owner' || role === 'admin' || role === 'sales'
+/** สิทธิ์ระดับแอดมินขึ้นไป (ตั้งค่าระบบ, ลบข้อมูล) */
+export const isAdminUp = (role: Role) => role === 'owner' || role === 'admin'
+/** สิทธิ์จัดการผู้ใช้: เชิญ, เปลี่ยนบทบาท, ตั้งรหัสผ่านใหม่ */
+export const canManageUsers = isAdminUp
 
 export const PROVINCES = [
   'กรุงเทพมหานคร','กระบี่','กาญจนบุรี','กาฬสินธุ์','กำแพงเพชร','ขอนแก่น','จันทบุรี','ฉะเชิงเทรา','ชลบุรี','ชัยนาท',
