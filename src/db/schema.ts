@@ -60,6 +60,13 @@ export const users = pgTable('users', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+/** ลิงก์สั้นสำหรับลิงก์เชิญ (คัดลอกส่งไลน์/แชทได้สะดวก) — /i/[code] redirect ไป url จริง */
+export const shortLinks = pgTable('short_links', {
+  code: varchar('code', { length: 16 }).primaryKey(),
+  url: text('url').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 export const buRates = pgTable('bu_rates', {
   bu: buEnum('bu').primaryKey(),
   ratePerSqm: integer('rate_per_sqm').notNull(),

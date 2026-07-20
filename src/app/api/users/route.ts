@@ -1,15 +1,34 @@
 import { NextResponse } from 'next/server'
 import { clerkClient } from '@clerk/nextjs/server'
 import { eq } from 'drizzle-orm'
+import { randomBytes } from 'node:crypto'
 import { getDb } from '@/db'
-import { users } from '@/db/schema'
+import { users, shortLinks } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
 import { canManageUsers, ROLES, BUS, type Role } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
+/* ลิงก์เชิญของ Clerk ยาวมาก — ย่อเป็น /i/<code> บนโดเมนเราเอง */
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+const genCode = () => Array.from(randomBytes(6), (n) => CODE_CHARS[n % CODE_CHARS.length]).join('')
+async function shortInviteUrl(origin: string, url: string | null): Promise<string | null> {
+  if (!url) return null
+  const db = getDb()
+  const [ex] = await db.select().from(shortLinks).where(eq(shortLinks.url, url)).limit(1)
+  if (ex) return `${origin}/i/${ex.code}`
+  for (let i = 0; i < 3; i++) {
+    const code = genCode()
+    try {
+      await db.insert(shortLinks).values({ code, url })
+      return `${origin}/i/${code}`
+    } catch { /* code ชนกัน (โอกาสน้อยมาก) — สุ่มใหม่ */ }
+  }
+  return url // ย่อไม่สำเร็จ ใช้ลิงก์ยาวไปก่อน
+}
+
 /** รายชื่อผู้ใช้ทั้งหมด + คำเชิญที่ยังค้าง (เฉพาะเจ้าของ/ผู้ดูแลระบบ) */
-export async function GET() {
+export async function GET(req: Request) {
   const me = await getSessionUser()
   if (!me || !me.active) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   if (!canManageUsers(me.role)) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
@@ -17,11 +36,15 @@ export async function GET() {
   const db = getDb()
   const rows = await db.select().from(users).orderBy(users.id)
 
+  const origin = new URL(req.url).origin
   let invitations: { id: string; email: string; createdAt: number; url: string | null }[] = []
   try {
     const client = await clerkClient()
     const inv = await client.invitations.getInvitationList({ status: 'pending' })
-    invitations = inv.data.map((i) => ({ id: i.id, email: i.emailAddress.toLowerCase(), createdAt: i.createdAt, url: i.url ?? null }))
+    invitations = await Promise.all(inv.data.map(async (i) => ({
+      id: i.id, email: i.emailAddress.toLowerCase(), createdAt: i.createdAt,
+      url: await shortInviteUrl(origin, i.url ?? null),
+    })))
   } catch {
     // Clerk ล่มไม่ควรทำให้รายชื่อผู้ใช้ดูไม่ได้
   }
@@ -61,7 +84,7 @@ export async function POST(req: Request) {
   try {
     const client = await clerkClient()
     const inv = await client.invitations.createInvitation({ emailAddress: email, notify: true, ignoreExisting: true })
-    inviteUrl = inv.url ?? null
+    inviteUrl = await shortInviteUrl(new URL(req.url).origin, inv.url ?? null)
   } catch (e) {
     const msg = (e as { errors?: { longMessage?: string; message?: string }[] })?.errors?.[0]?.longMessage
       || (e as Error).message || 'ส่งคำเชิญไม่สำเร็จ'
