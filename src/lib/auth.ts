@@ -24,21 +24,27 @@ export type SessionUser = {
 export async function getSessionUser(): Promise<SessionUser | null> {
   const { userId } = await auth()
   if (!userId) return null
+  const db = getDb()
 
+  // ทางเร็ว: เคยผูก clerk_id แล้ว → 1 query จบ ไม่ต้องเรียก Clerk API
+  const byClerk = await db.select().from(users).where(eq(users.clerkId, userId)).limit(1)
+  if (byClerk.length) {
+    const u = byClerk[0]
+    return { id: u.id, email: u.email, name: u.name, image: u.image, role: u.role as Role, bu: u.bu, active: u.active }
+  }
+
+  // ครั้งแรกของบัญชีนี้ — ถามอีเมลจาก Clerk แล้วผูก clerk_id + sync ชื่อ/รูปไว้เลย
   const cu = await currentUser()
   const email = cu?.emailAddresses?.[0]?.emailAddress?.toLowerCase()
   if (!email) return null
 
-  const db = getDb()
   const name = [cu?.firstName, cu?.lastName].filter(Boolean).join(' ') || cu?.username || null
   const image = cu?.imageUrl ?? null
 
   const existing = await db.select().from(users).where(eq(users.email, email)).limit(1)
   if (existing.length) {
     const u = existing[0]
-    if (u.name !== name || u.image !== image) {
-      await db.update(users).set({ name, image }).where(eq(users.id, u.id))
-    }
+    await db.update(users).set({ clerkId: userId, name, image }).where(eq(users.id, u.id))
     return { id: u.id, email: u.email, name, image, role: u.role as Role, bu: u.bu, active: u.active }
   }
 
@@ -48,6 +54,6 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     .where(sql`${users.role} in ('owner', 'admin')`)) as unknown as [{ n: number }]
   if (adminCount > 0) return null // เชิญเท่านั้น — อีเมลนี้ไม่ได้ถูกสร้างจากหน้า "จัดการผู้ใช้"
 
-  const [created] = await db.insert(users).values({ email, name, image, role: 'owner' }).returning()
+  const [created] = await db.insert(users).values({ email, name, image, role: 'owner', clerkId: userId }).returning()
   return { id: created.id, email: created.email, name, image, role: 'owner', bu: created.bu, active: created.active }
 }

@@ -14,15 +14,16 @@ export async function GET() {
   if (!me) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const db = getDb()
 
-  const rates = await getRates()
-  const rows = await db.select().from(customers).orderBy(desc(customers.amountActual), desc(customers.amountEst))
-
-  const appts = await db.select().from(appointments).orderBy(desc(appointments.apptDate))
+  // อิสระต่อกันทั้งหมด — ยิงพร้อมกันรอบเดียว (เดิมต่อกัน 5 รอบ ช้ามาก)
+  const [rates, rows, appts, attCounts, noteCounts] = await Promise.all([
+    getRates(),
+    db.select().from(customers).orderBy(desc(customers.amountActual), desc(customers.amountEst)),
+    db.select().from(appointments).orderBy(desc(appointments.apptDate)),
+    db.select({ id: attachments.customerId, n: sql<number>`count(*)::int` }).from(attachments).groupBy(attachments.customerId),
+    db.select({ id: notes.customerId, n: sql<number>`count(*)::int` }).from(notes).groupBy(notes.customerId),
+  ])
   const apptByCust = new Map<number, (typeof appts)[number]>()
   for (const a of appts) if (!apptByCust.has(a.customerId)) apptByCust.set(a.customerId, a)
-
-  const attCounts = await db.select({ id: attachments.customerId, n: sql<number>`count(*)::int` }).from(attachments).groupBy(attachments.customerId)
-  const noteCounts = await db.select({ id: notes.customerId, n: sql<number>`count(*)::int` }).from(notes).groupBy(notes.customerId)
   const attMap = new Map(attCounts.map((r) => [r.id, r.n]))
   const noteMap = new Map(noteCounts.map((r) => [r.id, r.n]))
 

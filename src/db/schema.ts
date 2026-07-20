@@ -52,6 +52,8 @@ export type QuoteStatus = (typeof QUOTE_STATUSES)[number]
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
   email: varchar('email', { length: 190 }).notNull().unique(),
+  /** Clerk user id — ผูกครั้งแรกที่ล็อกอิน ใช้ lookup เร็วโดยไม่ต้องเรียก Clerk API */
+  clerkId: varchar('clerk_id', { length: 64 }).unique(),
   name: varchar('name', { length: 120 }),
   image: text('image'),
   role: roleEnum('role').notNull().default('viewer'),

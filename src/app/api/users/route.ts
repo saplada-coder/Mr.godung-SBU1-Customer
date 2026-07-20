@@ -34,20 +34,23 @@ export async function GET(req: Request) {
   if (!canManageUsers(me.role)) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
   const db = getDb()
-  const rows = await db.select().from(users).orderBy(users.id)
-
   const origin = new URL(req.url).origin
-  let invitations: { id: string; email: string; createdAt: number; url: string | null }[] = []
-  try {
-    const client = await clerkClient()
-    const inv = await client.invitations.getInvitationList({ status: 'pending' })
-    invitations = await Promise.all(inv.data.map(async (i) => ({
-      id: i.id, email: i.emailAddress.toLowerCase(), createdAt: i.createdAt,
-      url: await shortInviteUrl(origin, i.url ?? null),
-    })))
-  } catch {
-    // Clerk ล่มไม่ควรทำให้รายชื่อผู้ใช้ดูไม่ได้
-  }
+  const [rows, invitations] = await Promise.all([
+    db.select().from(users).orderBy(users.id),
+    (async () => {
+      try {
+        const client = await clerkClient()
+        const inv = await client.invitations.getInvitationList({ status: 'pending' })
+        return Promise.all(inv.data.map(async (i) => ({
+          id: i.id, email: i.emailAddress.toLowerCase(), createdAt: i.createdAt,
+          url: await shortInviteUrl(origin, i.url ?? null),
+        })))
+      } catch {
+        // Clerk ล่มไม่ควรทำให้รายชื่อผู้ใช้ดูไม่ได้
+        return [] as { id: string; email: string; createdAt: number; url: string | null }[]
+      }
+    })(),
+  ])
 
   return NextResponse.json({
     users: rows.map((u) => {

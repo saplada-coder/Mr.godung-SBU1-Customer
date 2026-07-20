@@ -22,6 +22,7 @@ type Meta = { updated: string; ref: string; refLabel: string; targetYear: string
 type Me = { id: number; email: string; name: string | null; image: string | null; role: Role; bu: string | null }
 type View = 'overview' | 'alerts' | 'intake' | 'regions' | 'customers' | 'users'
 const TITLES: Record<View, string> = { overview: 'ภาพรวม', alerts: 'แจ้งเตือน', intake: 'ลูกค้าเข้าใหม่', regions: 'ภูมิภาค (BU)', customers: 'รายการลูกค้า', users: 'จัดการผู้ใช้' }
+const CACHE_KEY = 'sbu1-dash-cache-v1'
 const REF = () => toMs('2026-07-15') // อ้างอิงข้อมูลล่าสุด
 const NOW = () => Date.UTC(2026, 6, 17)
 
@@ -79,8 +80,16 @@ export default function Dashboard({ me }: { me: Me }) {
     if (!r.ok) { showToast('โหลดข้อมูลไม่สำเร็จ'); setLoading(false); return }
     const j = await r.json()
     setRecords(j.records); setRates(j.rates); setMeta(j.meta); setLoading(false)
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ records: j.records, rates: j.rates, meta: j.meta })) } catch { /* เต็ม/ปิดไว้ ไม่เป็นไร */ }
   }, [showToast])
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    // โชว์ข้อมูลรอบก่อนทันที (ถ้ามี) แล้วค่อยดึงของสดมาแทน — ตัดหน้าจอ "กำลังโหลด" ที่ค้างนาน
+    try {
+      const c = localStorage.getItem(CACHE_KEY)
+      if (c) { const j = JSON.parse(c); setRecords(j.records); setRates(j.rates); setMeta(j.meta); setLoading(false) }
+    } catch { /* cache เสีย — โหลดปกติ */ }
+    load()
+  }, [load])
 
   const rateOf = useCallback((bu: string) => rates[bu] ?? DEFAULT_RATES[bu as keyof typeof DEFAULT_RATES] ?? 5500, [rates])
 
