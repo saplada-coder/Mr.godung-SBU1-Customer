@@ -86,8 +86,10 @@ export async function POST(req: Request) {
   let inviteUrl: string | null = null
   try {
     const client = await clerkClient()
-    const inv = await client.invitations.createInvitation({ emailAddress: email, notify: true, ignoreExisting: true })
-    inviteUrl = await shortInviteUrl(new URL(req.url).origin, inv.url ?? null)
+    const origin = new URL(req.url).origin
+    // redirectUrl → หน้า /sign-up ของเราเอง (อีเมล+รหัสผ่าน ไม่มีปุ่ม Google)
+    const inv = await client.invitations.createInvitation({ emailAddress: email, notify: true, ignoreExisting: true, redirectUrl: `${origin}/sign-up` })
+    inviteUrl = await shortInviteUrl(origin, inv.url ?? null)
   } catch (e) {
     const msg = (e as { errors?: { longMessage?: string; message?: string }[] })?.errors?.[0]?.longMessage
       || (e as Error).message || 'ส่งคำเชิญไม่สำเร็จ'
