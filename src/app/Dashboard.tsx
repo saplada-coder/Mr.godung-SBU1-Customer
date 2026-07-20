@@ -574,8 +574,11 @@ function Customers({ records, editable, onManage, onAdd, patch }: {
 }
 
 /* ---------------- Users management ---------------- */
-type AppUser = { id: number; email: string; name: string | null; image: string | null; role: Role; bu: string | null; active: boolean; invited: boolean }
-type Invite = { id: string; email: string; createdAt: number }
+type AppUser = { id: number; email: string; name: string | null; image: string | null; role: Role; bu: string | null; active: boolean; invited: boolean; inviteUrl: string | null }
+type Invite = { id: string; email: string; createdAt: number; url: string | null }
+async function copyText(t: string): Promise<boolean> {
+  try { await navigator.clipboard.writeText(t); return true } catch { return false }
+}
 function UsersView({ me, showToast }: { me: Me; showToast: (m: string) => void }) {
   const [data, setData] = useState<{ users: AppUser[]; invitations: Invite[]; hasOwner: boolean } | null>(null)
   const [inviteOpen, setInviteOpen] = useState(false)
@@ -596,6 +599,16 @@ function UsersView({ me, showToast }: { me: Me; showToast: (m: string) => void }
     const r = await fetch(`/api/users/${invId}`, { method: 'DELETE' })
     if (r.ok) { showToast('ยกเลิกคำเชิญแล้ว'); load() } else showToast((await r.json()).error || 'ผิดพลาด')
   }
+  const copyInvite = async (url: string | null) => {
+    if (!url) { showToast('คำเชิญนี้ไม่มีลิงก์ให้คัดลอก — กด "เชิญผู้ใช้" ซ้ำเพื่อออกลิงก์ใหม่'); return }
+    showToast((await copyText(url)) ? 'คัดลอกลิงก์เชิญแล้ว — ส่งให้ทางไลน์/แชทได้เลย' : 'คัดลอกไม่สำเร็จ')
+  }
+  const copyBtn = (url: string | null) => (
+    <button className="row-btn" onClick={() => copyInvite(url)} title="คัดลอกลิงก์เชิญ">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 3 }}><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 012-2h10" /></svg>
+      คัดลอกลิงก์
+    </button>
+  )
 
   if (!data) return <div className="empty">กำลังโหลดรายชื่อผู้ใช้…</div>
   const isOwner = me.role === 'owner'
@@ -640,7 +653,8 @@ function UsersView({ me, showToast }: { me: Me; showToast: (m: string) => void }
                 </td>
                 <td>{statusChip(u)}</td>
                 <td className="act" style={{ whiteSpace: 'nowrap' }}>
-                  {(isOwner || u.role !== 'owner' || u.id === me.id) && <button className="row-btn" onClick={() => setPwUser(u)}>ตั้งรหัสผ่าน</button>}
+                  {u.invited && copyBtn(u.inviteUrl)}
+                  {(isOwner || u.role !== 'owner' || u.id === me.id) && <button className="row-btn" style={{ marginLeft: u.invited ? 6 : 0 }} onClick={() => setPwUser(u)}>ตั้งรหัสผ่าน</button>}
                   {canEditRow(u) && <button className="row-btn" style={{ marginLeft: 6, color: u.active ? '#b0281c' : '#3f8f3a' }} onClick={() => patch(u.id, { active: !u.active }, u.active ? 'ระงับบัญชีแล้ว' : 'เปิดใช้งานแล้ว')}>{u.active ? 'ระงับ' : 'เปิดใช้'}</button>}
                 </td>
               </tr>
@@ -651,7 +665,10 @@ function UsersView({ me, showToast }: { me: Me; showToast: (m: string) => void }
                 <td style={{ color: 'var(--text-faint)' }}>—</td>
                 <td style={{ color: 'var(--text-faint)' }}>—</td>
                 <td><span className="qchip" style={{ color: '#b58600', background: '#fbeec0', cursor: 'default' }}>รอตอบรับคำเชิญ</span></td>
-                <td className="act"><button className="row-btn" style={{ color: '#b0281c' }} onClick={() => revoke(i.id)}>ยกเลิกคำเชิญ</button></td>
+                <td className="act" style={{ whiteSpace: 'nowrap' }}>
+                  {copyBtn(i.url)}
+                  <button className="row-btn" style={{ marginLeft: 6, color: '#b0281c' }} onClick={() => revoke(i.id)}>ยกเลิกคำเชิญ</button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -668,12 +685,37 @@ function InviteModal({ isOwner, onClose, onSaved, showToast }: { isOwner: boolea
   const [role, setRole] = useState<string>('sales')
   const [bu, setBu] = useState('')
   const [busy, setBusy] = useState(false)
+  const [sentUrl, setSentUrl] = useState<string | null>(null)
   const save = async () => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { showToast('กรอกอีเมลให้ถูกต้อง'); return }
     setBusy(true)
     const r = await fetch('/api/users', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: email.trim(), role, bu: bu || null }) })
     setBusy(false)
-    if (r.ok) { showToast('ส่งคำเชิญไปที่ ' + email.trim() + ' แล้ว'); onSaved() } else showToast((await r.json()).error || 'ส่งคำเชิญไม่สำเร็จ')
+    if (r.ok) {
+      const j = await r.json()
+      showToast('ส่งคำเชิญไปที่ ' + email.trim() + ' แล้ว')
+      if (j.inviteUrl) setSentUrl(j.inviteUrl)
+      else onSaved()
+    } else showToast((await r.json()).error || 'ส่งคำเชิญไม่สำเร็จ')
+  }
+  if (sentUrl) {
+    return (
+      <div className="modal-bd" onClick={(e) => { if (e.target === e.currentTarget) onSaved() }}>
+        <div className="modal" role="dialog" aria-modal style={{ maxWidth: 460 }}>
+          <div className="modal-h"><div><h3>ส่งคำเชิญแล้ว 🎉</h3><div className="sub">{email.trim()}</div></div><button className="modal-x" onClick={onSaved}>×</button></div>
+          <div className="form">
+            <div className="field full"><label>ลิงก์เชิญ (ส่งให้ทางไลน์/แชทได้)</label>
+              <input readOnly value={sentUrl} onFocus={(e) => e.currentTarget.select()} />
+              <div className="hintline">อีเมลคำเชิญถูกส่งไปแล้วด้วย — ลิงก์นี้ใช้ได้ลิงก์เดียวและหมดอายุใน 30 วัน</div>
+            </div>
+          </div>
+          <div className="modal-f">
+            <button className="btn" onClick={onSaved}>ปิด</button>
+            <button className="btn btn-primary" onClick={async () => showToast((await copyText(sentUrl)) ? 'คัดลอกลิงก์เชิญแล้ว' : 'คัดลอกไม่สำเร็จ')}>คัดลอกลิงก์</button>
+          </div>
+        </div>
+      </div>
+    )
   }
   return (
     <div className="modal-bd" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>

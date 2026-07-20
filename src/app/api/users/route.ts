@@ -17,21 +17,24 @@ export async function GET() {
   const db = getDb()
   const rows = await db.select().from(users).orderBy(users.id)
 
-  let invitations: { id: string; email: string; createdAt: number }[] = []
+  let invitations: { id: string; email: string; createdAt: number; url: string | null }[] = []
   try {
     const client = await clerkClient()
     const inv = await client.invitations.getInvitationList({ status: 'pending' })
-    invitations = inv.data.map((i) => ({ id: i.id, email: i.emailAddress.toLowerCase(), createdAt: i.createdAt }))
+    invitations = inv.data.map((i) => ({ id: i.id, email: i.emailAddress.toLowerCase(), createdAt: i.createdAt, url: i.url ?? null }))
   } catch {
     // Clerk ล่มไม่ควรทำให้รายชื่อผู้ใช้ดูไม่ได้
   }
 
   return NextResponse.json({
-    users: rows.map((u) => ({
-      id: u.id, email: u.email, name: u.name, image: u.image,
-      role: u.role, bu: u.bu, active: u.active,
-      invited: invitations.some((i) => i.email === u.email),
-    })),
+    users: rows.map((u) => {
+      const inv = invitations.find((i) => i.email === u.email)
+      return {
+        id: u.id, email: u.email, name: u.name, image: u.image,
+        role: u.role, bu: u.bu, active: u.active,
+        invited: !!inv, inviteUrl: inv?.url ?? null,
+      }
+    }),
     invitations: invitations.filter((i) => !rows.some((u) => u.email === i.email)),
     hasOwner: rows.some((u) => u.role === 'owner' && u.active),
   })
@@ -54,9 +57,11 @@ export async function POST(req: Request) {
   const db = getDb()
   const [existing] = await db.select().from(users).where(eq(users.email, email)).limit(1)
 
+  let inviteUrl: string | null = null
   try {
     const client = await clerkClient()
-    await client.invitations.createInvitation({ emailAddress: email, notify: true, ignoreExisting: true })
+    const inv = await client.invitations.createInvitation({ emailAddress: email, notify: true, ignoreExisting: true })
+    inviteUrl = inv.url ?? null
   } catch (e) {
     const msg = (e as { errors?: { longMessage?: string; message?: string }[] })?.errors?.[0]?.longMessage
       || (e as Error).message || 'ส่งคำเชิญไม่สำเร็จ'
@@ -67,5 +72,5 @@ export async function POST(req: Request) {
   if (existing) await db.update(users).set({ role, bu, active: true }).where(eq(users.id, existing.id))
   else await db.insert(users).values({ email, role, bu })
 
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ ok: true, inviteUrl })
 }
