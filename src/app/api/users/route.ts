@@ -9,6 +9,19 @@ import { canManageUsers, ROLES, BUS, type Role } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * แปลงลิงก์เชิญของ Clerk (ผ่าน accounts.dev) → หน้า /sign-up ของเราโดยตรง
+ * ผู้ถูกเชิญเข้าเว็บเราเลย อีเมลถูกล็อกตามคำเชิญ ตั้งรหัสผ่านเองแล้วเข้าแอปทันที
+ */
+function inviteLandingUrl(origin: string, clerkUrl: string | null): string | null {
+  if (!clerkUrl) return null
+  try {
+    const ticket = new URL(clerkUrl).searchParams.get('ticket')
+    if (ticket) return `${origin}/sign-up?__clerk_ticket=${encodeURIComponent(ticket)}`
+  } catch { /* รูปแบบลิงก์ไม่คาด — ใช้ของเดิม */ }
+  return clerkUrl
+}
+
 /* ลิงก์เชิญของ Clerk ยาวมาก — ย่อเป็น /i/<code> บนโดเมนเราเอง */
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
 const genCode = () => Array.from(randomBytes(6), (n) => CODE_CHARS[n % CODE_CHARS.length]).join('')
@@ -43,7 +56,7 @@ export async function GET(req: Request) {
         const inv = await client.invitations.getInvitationList({ status: 'pending' })
         return Promise.all(inv.data.map(async (i) => ({
           id: i.id, email: i.emailAddress.toLowerCase(), createdAt: i.createdAt,
-          url: await shortInviteUrl(origin, i.url ?? null),
+          url: await shortInviteUrl(origin, inviteLandingUrl(origin, i.url ?? null)),
         })))
       } catch {
         // Clerk ล่มไม่ควรทำให้รายชื่อผู้ใช้ดูไม่ได้
@@ -89,7 +102,7 @@ export async function POST(req: Request) {
     const origin = new URL(req.url).origin
     // redirectUrl → หน้า /sign-up ของเราเอง (อีเมล+รหัสผ่าน ไม่มีปุ่ม Google)
     const inv = await client.invitations.createInvitation({ emailAddress: email, notify: true, ignoreExisting: true, redirectUrl: `${origin}/sign-up` })
-    inviteUrl = await shortInviteUrl(origin, inv.url ?? null)
+    inviteUrl = await shortInviteUrl(origin, inviteLandingUrl(origin, inv.url ?? null))
   } catch (e) {
     const msg = (e as { errors?: { longMessage?: string; message?: string }[] })?.errors?.[0]?.longMessage
       || (e as Error).message || 'ส่งคำเชิญไม่สำเร็จ'
