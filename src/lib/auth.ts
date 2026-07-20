@@ -16,8 +16,9 @@ export type SessionUser = {
 
 /**
  * อ่านผู้ใช้ปัจจุบันจาก Clerk แล้ว sync เข้า users table.
- * - ถ้ายังไม่มี owner/admin เลย → คนแรกที่ล็อกอินกลายเป็น owner (bootstrap)
- * - นอกนั้น default = viewer (เจ้าของ/แอดมินค่อยเลื่อนสิทธิ์ หรือกำหนดตอนเชิญ)
+ * ระบบเป็นแบบเชิญเท่านั้น: อีเมลต้องมีแถวใน users อยู่แล้ว (สร้างจากหน้า "จัดการผู้ใช้")
+ * - ถ้ายังไม่มี owner/admin เลย → คนแรกที่ล็อกอินกลายเป็น owner (bootstrap ระบบใหม่)
+ * - อีเมลที่ไม่รู้จัก (สมัครเองผ่าน Clerk) → null = ไม่มีสิทธิ์เข้าใช้
  * - บัญชีที่ถูกระงับ (active=false) ยังได้ค่ากลับไป — ผู้เรียกต้องเช็ค active เอง
  */
 export async function getSessionUser(): Promise<SessionUser | null> {
@@ -45,8 +46,8 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     .select({ n: sql<number>`count(*)::int` })
     .from(users)
     .where(sql`${users.role} in ('owner', 'admin')`)) as unknown as [{ n: number }]
-  const role: Role = adminCount === 0 ? 'owner' : 'viewer'
+  if (adminCount > 0) return null // เชิญเท่านั้น — อีเมลนี้ไม่ได้ถูกสร้างจากหน้า "จัดการผู้ใช้"
 
-  const [created] = await db.insert(users).values({ email, name, image, role }).returning()
-  return { id: created.id, email: created.email, name, image, role, bu: created.bu, active: created.active }
+  const [created] = await db.insert(users).values({ email, name, image, role: 'owner' }).returning()
+  return { id: created.id, email: created.email, name, image, role: 'owner', bu: created.bu, active: created.active }
 }
