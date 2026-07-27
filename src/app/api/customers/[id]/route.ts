@@ -50,11 +50,13 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if ('province' in b) patch.province = (b.province ?? '').trim() || null
   if ('detail' in b) patch.detail = (b.detail ?? '').trim() || null
   if ('cat' in b) patch.cat = b.cat || null
+  if ('d' in b) patch.inquiredAt = /^\d{4}-\d{2}-\d{2}$/.test(String(b.d)) ? b.d : null
 
-  if ('k' in b || 'y' in b || 's' in b) {
+  if ('k' in b || 'y' in b || 's' in b || 'sqm' in b) {
     const k = num(b.k), y = num(b.y), s = num(b.s)
     patch.widthM = str(k); patch.lengthM = str(y); patch.heightM = str(s)
-    const sqm = k != null && y != null ? k * y : null
+    // มี ก×ย → คำนวณให้; ไม่มี → ใช้ ตร.ม. ที่กรอกตรงๆ
+    const sqm = k != null && y != null ? k * y : num(b.sqm)
     patch.sqm = str(sqm)
     const rates = await getRates()
     if (!isFinal((patch.status as string) ?? cur.status)) patch.amountEst = str(estimate(sqm, cur.bu, rates))

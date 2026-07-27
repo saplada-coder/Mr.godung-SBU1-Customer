@@ -816,25 +816,38 @@ function ManageModal({ rec, me, rateOf, onClose, onSaved, showToast }: {
   const [status, setStatus] = useState(rec.status)
   const [quote, setQuote] = useState(rec.quote)
   const [amount, setAmount] = useState(rec.shownVal != null ? String(rec.shownVal) : '')
+  const [name, setName] = useState(rec.name || '')
   const [phone, setPhone] = useState(rec.phone || '')
   const [channel, setChannel] = useState(rec.channel || 'FB : Mr.โกดัง')
   const [chname, setChname] = useState(rec.chname || '')
+  const [province, setProvince] = useState(rec.province || '')
+  const [cat, setCat] = useState(rec.cat || '')
+  const [detail, setDetail] = useState(rec.detail || '')
+  const [d, setD] = useState(rec.d || '')
+  const [k, setK] = useState(rec.k != null ? String(rec.k) : '')
+  const [y, setY] = useState(rec.y != null ? String(rec.y) : '')
+  const [sHt, setSHt] = useState(rec.s != null ? String(rec.s) : '')
+  const [sqm, setSqm] = useState(rec.sqm != null ? String(rec.sqm) : '')
   const [apptType, setApptType] = useState(rec.appt?.type || '')
   const [apptDate, setApptDate] = useState(rec.appt?.date || '')
   const [apptTime, setApptTime] = useState(rec.appt?.time || '')
   const [apptNote, setApptNote] = useState(rec.appt?.note || '')
   const [note, setNote] = useState('')
-  const [links, setLinks] = useState<{ kind: string; name: string; url: string }[]>([])
   const [busy, setBusy] = useState(false)
   const fin = isFinal(status)
-  const est = rec.sqm ? Math.round(rec.sqm * rateOf(rec.bu)) : null
+  // ตร.ม. ที่จะบันทึก: มี ก×ย → คำนวณ; ไม่มี → ใช้ที่กรอกตรงๆ
+  const effSqm = (+k > 0 && +y > 0) ? +k * +y : (+sqm > 0 ? +sqm : null)
+  const est = effSqm ? Math.round(effSqm * rateOf(rec.bu)) : null
 
   const save = async () => {
     if (status === ST_APPT && !apptDate) { showToast('สถานะนัด ต้องระบุวันที่นัด'); return }
     if (fin && !amount) { showToast('งานที่ปิด/เซ็นแล้ว ต้องระบุมูลค่าจริง'); return }
+    if (!name.trim() && !chname.trim()) { showToast('ต้องมีชื่อลูกค้า หรือชื่อช่องทางอย่างน้อย 1 อย่าง'); return }
     setBusy(true)
     const body: Record<string, unknown> = {
-      status, quote, phone, channel, chname, amount: amount === '' ? null : Number(amount),
+      status, quote, name, phone, channel, chname, province, cat, detail, d: d || null,
+      k: k || null, y: y || null, s: sHt || null, sqm: sqm || null,
+      amount: amount === '' ? null : Number(amount),
       appt: apptDate ? { type: apptType || 'site', date: apptDate, time: apptTime, note: apptNote } : null,
     }
     if (note.trim()) body.note = note.trim()
@@ -847,14 +860,27 @@ function ManageModal({ rec, me, rateOf, onClose, onSaved, showToast }: {
       <div className="modal" role="dialog" aria-modal>
         <div className="modal-h"><div><h3>{rec.name || rec.chname || rec.code}</h3><div className="sub">{rec.code} · {BU_NAMES[rec.bu as keyof typeof BU_NAMES]}{rec.phone ? ' · ' + fmtPhone(rec.phone) : ''}{rec.province ? ' · ' + rec.province : ''}</div></div><button className="modal-x" onClick={onClose}>×</button></div>
         <div className="form">
-          <div className="field"><label>เบอร์โทร</label><input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="numeric" /></div>
+          <div className="fs"><div className="fs-t">ข้อมูลลูกค้า</div><div className="hintline">แก้ไขได้ทุกช่อง — ลูกค้าให้ข้อมูลเพิ่มภายหลังก็มาเติมตรงนี้</div></div>
+          <div className="field"><label>ชื่อลูกค้า</label><input value={name} onChange={(e) => setName(e.target.value)} placeholder="เช่น คุณสมชาย" /></div>
+          <div className="field"><label>เบอร์โทร</label><input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="numeric" placeholder="0812345678" /></div>
           <div className="field"><label>ช่องทางการติดต่อ</label><select value={channel} onChange={(e) => setChannel(e.target.value)}>{CHANNELS.map((c) => <option key={c}>{c}</option>)}</select></div>
-          <div className="field full"><label>ชื่อช่องทางการติดต่อ</label><input value={chname} onChange={(e) => setChname(e.target.value)} placeholder="ชื่อที่แสดงใน FB / LINE" /></div>
+          <div className="field"><label>ชื่อช่องทางการติดต่อ</label><input value={chname} onChange={(e) => setChname(e.target.value)} placeholder="ชื่อที่แสดงใน FB / LINE" /></div>
+          <div className="field"><label>จังหวัด</label><select value={province} onChange={(e) => setProvince(e.target.value)}><option value="">— เลือกจังหวัด —</option>{PROVINCES.map((p) => <option key={p}>{p}</option>)}</select></div>
+          <div className="field"><label>ประเภทธุรกิจ</label><select value={cat} onChange={(e) => setCat(e.target.value)}><option value="">— ไม่ระบุ —</option>{CATS.map((c) => <option key={c}>{c}</option>)}</select></div>
+          <div className="field"><label>วันที่รับข้อมูล</label><input type="date" value={d} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setD(e.target.value)} onClick={(e) => (e.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.()} /></div>
+          <div className="field full"><label>รายละเอียด / ข้อมูลเพิ่มเติม</label><input value={detail} onChange={(e) => setDetail(e.target.value)} placeholder="เช่น โกดังเก็บสินค้า / ข้อมูลที่ลูกค้าให้เพิ่ม" /></div>
+          <div className="field full"><label>ขนาด — กว้าง × ยาว × สูง (เมตร)</label>
+            <div className="dims"><input type="number" value={k} onChange={(e) => { setK(e.target.value); if (e.target.value && y) setSqm('') }} placeholder="กว้าง" /><input type="number" value={y} onChange={(e) => { setY(e.target.value); if (k && e.target.value) setSqm('') }} placeholder="ยาว" /><input type="number" value={sHt} onChange={(e) => setSHt(e.target.value)} placeholder="สูง" /></div>
+          </div>
+          <div className="field full"><label>พื้นที่ (ตร.ม.){(+k > 0 && +y > 0) ? ' — คำนวณจาก ก×ย อัตโนมัติ' : ' — กรอกเองได้เมื่อไม่มีขนาด'}</label>
+            <input type="number" value={(+k > 0 && +y > 0) ? String(+k * +y) : sqm} disabled={+k > 0 && +y > 0} onChange={(e) => setSqm(e.target.value)} placeholder="เช่น 300" />
+          </div>
+          <div className="fs"><div className="fs-t">สถานะ &amp; มูลค่า</div></div>
           <div className="field"><label>สถานะติดตาม</label><select value={status} onChange={(e) => setStatus(e.target.value)}>{LEAD_STATUSES.map((s) => <option key={s}>{s}</option>)}</select></div>
           <div className="field"><label>สถานะใบเสนอราคา</label><select value={quote} onChange={(e) => setQuote(e.target.value)}>{QUOTE_STATUSES.map((s) => <option key={s}>{s}</option>)}</select></div>
           <div className="field full"><label>{fin ? 'มูลค่าจริง (บาท) *' : 'มูลค่าประมาณ (บาท)'}</label>
             <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            <div className="hintline">{est != null ? <>คำนวณ: {commas(rec.sqm)} ตร.ม. × ฿{commas(rateOf(rec.bu))}/ตร.ม. ({rec.bu}) = <b>฿{commas(est)}</b>{!fin && <> · <button type="button" className="btn-sm" style={{ padding: 0, border: 'none', background: 'none', color: 'var(--accent)', fontWeight: 700, cursor: 'pointer' }} onClick={() => setAmount(String(est))}>ใช้ค่าที่คำนวณ</button></>}</> : 'ไม่มีข้อมูลพื้นที่ จึงคำนวณให้ไม่ได้'}</div>
+            <div className="hintline">{est != null ? <>คำนวณ: {commas(effSqm)} ตร.ม. × ฿{commas(rateOf(rec.bu))}/ตร.ม. ({rec.bu}) = <b>฿{commas(est)}</b>{!fin && <> · <button type="button" className="btn-sm" style={{ padding: 0, border: 'none', background: 'none', color: 'var(--accent)', fontWeight: 700, cursor: 'pointer' }} onClick={() => setAmount(String(est))}>ใช้ค่าที่คำนวณ</button></>}</> : 'ไม่มีข้อมูลพื้นที่ จึงคำนวณให้ไม่ได้'}</div>
           </div>
           <div className="fs"><div className="fs-t">นัดหมาย Zoom / ดูหน้างาน</div><div className="hintline">ตั้งได้ทั้งก่อนและหลังใบเสนอราคา — จะไปโผล่ในหน้า &quot;แจ้งเตือน&quot;</div></div>
           <div className="field"><label>ประเภทนัด</label><select value={apptType} onChange={(e) => setApptType(e.target.value)}><option value="">— ไม่มีนัด —</option><option value="zoom">Zoom</option><option value="site">ดูหน้างาน</option></select></div>
@@ -872,10 +898,11 @@ function ManageModal({ rec, me, rateOf, onClose, onSaved, showToast }: {
 
 function AddModal({ records, rateOf, onClose, onSaved, showToast }: { records: Rec[]; rateOf: (bu: string) => number; onClose: () => void; onSaved: () => void; showToast: (m: string) => void }) {
   const today = new Date().toISOString().slice(0, 10)
-  const [f, setF] = useState({ name: '', phone: '', channel: 'FB : Mr.โกดัง', chname: '', bu: 'BU1', province: '', cat: CATS[0] as string, detail: '', k: '', y: '', s: '', amount: '', d: today, status: ST_NEW as string, quote: 'ยังไม่ทำใบเสนอราคา', apptType: 'zoom', apptDate: '', apptTime: '' })
+  const [f, setF] = useState({ name: '', phone: '', channel: 'FB : Mr.โกดัง', chname: '', bu: 'BU1', province: '', cat: CATS[0] as string, detail: '', k: '', y: '', s: '', sqm: '', amount: '', d: today, status: ST_NEW as string, quote: 'ยังไม่ทำใบเสนอราคา', apptType: 'zoom', apptDate: '', apptTime: '' })
   const [busy, setBusy] = useState(false)
   const set = (k: keyof typeof f, v: string) => setF((o) => ({ ...o, [k]: v }))
-  const sqm = (+f.k > 0 && +f.y > 0) ? +f.k * +f.y : 0
+  const dimsSqm = (+f.k > 0 && +f.y > 0) ? +f.k * +f.y : 0
+  const sqm = dimsSqm || (+f.sqm > 0 ? +f.sqm : 0)
   const est = sqm ? Math.round(sqm * rateOf(f.bu)) : null
   const fin = isFinal(f.status)
   const [amtTouched, setAmtTouched] = useState(false)
@@ -911,7 +938,10 @@ function AddModal({ records, rateOf, onClose, onSaved, showToast }: { records: R
           <div className="field"><label>จังหวัด</label><select value={f.province} onChange={(e) => set('province', e.target.value)}><option value="">— เลือกจังหวัด —</option>{PROVINCES.map((p) => <option key={p}>{p}</option>)}</select></div>
           <div className="field full"><label>ขนาด — กว้าง × ยาว × สูง (เมตร)</label>
             <div className="dims"><input type="number" value={f.k} onChange={(e) => set('k', e.target.value)} placeholder="กว้าง" /><input type="number" value={f.y} onChange={(e) => set('y', e.target.value)} placeholder="ยาว" /><input type="number" value={f.s} onChange={(e) => set('s', e.target.value)} placeholder="สูง" /></div>
-            <div className="hintline">พื้นที่ = กว้าง × ยาว {sqm ? `= ${commas(sqm)} ตร.ม.` : ''} (สูงบันทึกไว้ไม่นับเป็นพื้นที่)</div>
+            <div className="hintline">มี กว้าง×ยาว จะคำนวณ ตร.ม. ให้อัตโนมัติ (สูงไม่นับเป็นพื้นที่)</div>
+          </div>
+          <div className="field full"><label>พื้นที่ (ตร.ม.){dimsSqm ? ' — คำนวณจาก ก×ย' : ' — กรอกเองได้เมื่อไม่มีขนาด'}</label>
+            <input type="number" value={dimsSqm ? String(dimsSqm) : f.sqm} disabled={!!dimsSqm} onChange={(e) => set('sqm', e.target.value)} placeholder="เช่น 300" />
           </div>
           <div className="field"><label>สถานะติดตาม</label><select value={f.status} onChange={(e) => set('status', e.target.value)}>{LEAD_STATUSES.map((s) => <option key={s}>{s}</option>)}</select></div>
           <div className="field"><label>สถานะใบเสนอราคา</label><select value={f.quote} onChange={(e) => set('quote', e.target.value)}>{QUOTE_STATUSES.map((s) => <option key={s}>{s}</option>)}</select></div>
