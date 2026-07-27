@@ -510,6 +510,26 @@ function Customers({ records, editable, onManage, onAdd, patch }: {
     setPop({ r, kind, x: Math.min(rect.left + window.scrollX, window.scrollX + window.innerWidth - 228), y: rect.bottom + window.scrollY + 6 })
   }
 
+  const exportCsv = () => {
+    const cols: [string, (r: Rec) => string | number | null][] = [
+      ['รหัส', (r) => r.code], ['ชื่อลูกค้า', (r) => r.name], ['ชื่อช่องทาง', (r) => r.chname],
+      ['เบอร์โทร', (r) => r.phone], ['ช่องทาง', (r) => r.channel], ['ภูมิภาค', (r) => BU_NAMES[r.bu as keyof typeof BU_NAMES] || r.bu],
+      ['จังหวัด', (r) => r.province], ['ประเภทธุรกิจ', (r) => r.cat], ['รายละเอียด', (r) => r.detail],
+      ['กว้าง(ม.)', (r) => r.k], ['ยาว(ม.)', (r) => r.y], ['สูง(ม.)', (r) => r.s], ['พื้นที่(ตร.ม.)', (r) => r.sqm],
+      ['มูลค่า(บาท)', (r) => r.shownVal], ['ประเภทมูลค่า', (r) => (r.shownVal ? (r.isFinal ? 'มูลค่าจริง' : 'ประมาณ') : '')],
+      ['สถานะติดตาม', (r) => r.status], ['ใบเสนอราคา', (r) => r.quote],
+      ['วันที่รับข้อมูล', (r) => r.d], ['วันที่ปิดงาน', (r) => r.closedAt],
+      ['นัดหมาย', (r) => (r.appt?.date ? `${r.appt.type === 'zoom' ? 'Zoom' : 'ดูหน้างาน'} ${r.appt.date}${r.appt.time ? ' ' + r.appt.time : ''}` : '')],
+    ]
+    const esc = (v: string | number | null) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
+    const rows = [cols.map((c) => c[0]).join(','), ...list.map((r) => cols.map((c) => esc(c[1](r))).join(','))]
+    const blob = new Blob(['﻿' + rows.join('\r\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `ลูกค้า-SBU1-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click(); URL.revokeObjectURL(url)
+  }
+
   return (
     <>
       <div className="view-head"><div><h1>รายการลูกค้า &amp; ใบเสนอราคา</h1><p>คลิกสถานะเพื่ออัปเดต · กด &quot;จัดการ&quot; เพื่อแนบไฟล์ ตั้งนัด และบันทึกโน้ต</p></div></div>
@@ -525,6 +545,7 @@ function Customers({ records, editable, onManage, onAdd, patch }: {
         <select value={fStat} onChange={(e) => { setFStat(e.target.value); setShown(40) }}><option value="">ทุกสถานะติดตาม</option>{LEAD_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select>
         <select value={fQuote} onChange={(e) => { setFQuote(e.target.value); setShown(40) }}><option value="">ทุกสถานะใบเสนอราคา</option>{QUOTE_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select>
         {editable && <button className="btn btn-primary" onClick={onAdd}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}><path d="M12 5v14M5 12h14" /></svg>เพิ่มลูกค้า</button>}
+        <button className="btn" onClick={exportCsv} disabled={!list.length} title="ดาวน์โหลดรายการที่กรองอยู่เป็นไฟล์ CSV (เปิดใน Excel)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" /></svg>Export</button>
         <span className="tcount">{commas(list.length)} รายการ</span>
       </div>
       <div className="tscroll">
