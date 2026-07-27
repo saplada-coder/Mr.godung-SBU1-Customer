@@ -909,8 +909,8 @@ function ManageModal({ rec, me, rateOf, onClose, onSaved, showToast }: {
           <div className="field full"><label>ขนาด — กว้าง × ยาว × สูง (เมตร)</label>
             <div className="dims"><input type="number" value={k} onChange={(e) => { setK(e.target.value); if (e.target.value && y) setSqm('') }} placeholder="กว้าง" /><input type="number" value={y} onChange={(e) => { setY(e.target.value); if (k && e.target.value) setSqm('') }} placeholder="ยาว" /><input type="number" value={sHt} onChange={(e) => setSHt(e.target.value)} placeholder="สูง" /></div>
           </div>
-          <div className="field full"><label>พื้นที่ (ตร.ม.){(+k > 0 && +y > 0) ? ' — คำนวณจาก ก×ย อัตโนมัติ' : ' — กรอกเองได้เมื่อไม่มีขนาด'}</label>
-            <input type="number" value={(+k > 0 && +y > 0) ? String(+k * +y) : sqm} disabled={+k > 0 && +y > 0} onChange={(e) => setSqm(e.target.value)} placeholder="เช่น 300" />
+          <div className="field full"><label>พื้นที่ (ตร.ม.){(+k > 0 && +y > 0) ? ' — คำนวณจาก ก×ย (แก้ตรงนี้จะล้างขนาด ก×ย)' : ' — กรอกเองได้'}</label>
+            <input type="number" value={(+k > 0 && +y > 0) ? String(+k * +y) : sqm} onChange={(e) => { setSqm(e.target.value); setK(''); setY('') }} placeholder="เช่น 300" />
           </div>
           <div className="fs"><div className="fs-t">สถานะ &amp; มูลค่า</div></div>
           <div className="field"><label>สถานะติดตาม</label><select value={status} onChange={(e) => onStatusChange(e.target.value)}>{LEAD_STATUSES.map((s) => <option key={s}>{s}</option>)}</select></div>
@@ -992,8 +992,8 @@ function AddModal({ records, rateOf, onClose, onSaved, showToast }: { records: R
             <div className="dims"><input type="number" value={f.k} onChange={(e) => set('k', e.target.value)} placeholder="กว้าง" /><input type="number" value={f.y} onChange={(e) => set('y', e.target.value)} placeholder="ยาว" /><input type="number" value={f.s} onChange={(e) => set('s', e.target.value)} placeholder="สูง" /></div>
             <div className="hintline">มี กว้าง×ยาว จะคำนวณ ตร.ม. ให้อัตโนมัติ (สูงไม่นับเป็นพื้นที่)</div>
           </div>
-          <div className="field full"><label>พื้นที่ (ตร.ม.){dimsSqm ? ' — คำนวณจาก ก×ย' : ' — กรอกเองได้เมื่อไม่มีขนาด'}</label>
-            <input type="number" value={dimsSqm ? String(dimsSqm) : f.sqm} disabled={!!dimsSqm} onChange={(e) => set('sqm', e.target.value)} placeholder="เช่น 300" />
+          <div className="field full"><label>พื้นที่ (ตร.ม.){dimsSqm ? ' — คำนวณจาก ก×ย (แก้ตรงนี้จะล้างขนาด ก×ย)' : ' — กรอกเองได้'}</label>
+            <input type="number" value={dimsSqm ? String(dimsSqm) : f.sqm} onChange={(e) => setF((o) => ({ ...o, sqm: e.target.value, k: '', y: '' }))} placeholder="เช่น 300" />
           </div>
           <div className="field"><label>สถานะติดตาม</label><select value={f.status} onChange={(e) => set('status', e.target.value)}>{LEAD_STATUSES.map((s) => <option key={s}>{s}</option>)}</select></div>
           <div className="field"><label>สถานะใบเสนอราคา</label><select value={f.quote} onChange={(e) => set('quote', e.target.value)}>{QUOTE_STATUSES.map((s) => <option key={s}>{s}</option>)}</select></div>
