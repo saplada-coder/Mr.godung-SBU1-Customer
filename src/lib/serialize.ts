@@ -30,7 +30,7 @@ export function serializeCustomer(
     detail: c.detail, cat: c.cat,
     k: n(c.widthM), y: n(c.lengthM), s: n(c.heightM), sqm,
     amountEst: est, amountActual: actual, shownVal, isFinal: isFinal(c.status),
-    status: c.status, quote: c.quoteStatus, d: c.inquiredAt,
+    status: c.status, quote: c.quoteStatus, d: c.inquiredAt, closedAt: c.closedAt,
     appt: appt ? { type: appt.type, date: appt.apptDate, time: appt.apptTime ?? '', note: appt.note ?? '' } : null,
     attachCount: opts.attachCount ?? 0, noteCount: opts.noteCount ?? 0,
   }

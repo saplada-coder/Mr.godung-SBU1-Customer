@@ -1,13 +1,37 @@
 import { NextResponse } from 'next/server'
-import { and, eq } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 import { getDb } from '@/db'
-import { customers, appointments, notes, activityLog } from '@/db/schema'
+import { customers, appointments, notes, activityLog, users } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
 import { getRates } from '@/lib/rates'
 import { estimate } from '@/lib/serialize'
 import { canEdit, isAdminUp, isFinal, LEAD_STATUSES, QUOTE_STATUSES, CHANNELS, ST_APPT } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
+
+/** ประวัติของลูกค้า 1 ราย: ใครแก้อะไรเมื่อไหร่ + โน้ตติดตาม (เรียงใหม่สุดก่อน) */
+export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const me = await getSessionUser()
+  if (!me) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const id = Number((await ctx.params).id)
+  const db = getDb()
+
+  const acts = await db
+    .select({ action: activityLog.action, field: activityLog.field, oldValue: activityLog.oldValue, newValue: activityLog.newValue, at: activityLog.createdAt, who: users.name, email: users.email })
+    .from(activityLog).leftJoin(users, eq(activityLog.userId, users.id))
+    .where(eq(activityLog.customerId, id)).orderBy(desc(activityLog.createdAt)).limit(200)
+  const ns = await db
+    .select({ body: notes.body, at: notes.createdAt, who: users.name, email: users.email })
+    .from(notes).leftJoin(users, eq(notes.createdBy, users.id))
+    .where(eq(notes.customerId, id)).orderBy(desc(notes.createdAt))
+
+  const history = [
+    ...acts.map((a) => ({ kind: a.action, field: a.field, oldValue: a.oldValue, newValue: a.newValue, text: null as string | null, at: a.at, who: a.who || a.email || 'ระบบ' })),
+    ...ns.map((n) => ({ kind: 'note', field: null, oldValue: null, newValue: null, text: n.body, at: n.at, who: n.who || n.email || '—' })),
+  ].sort((a, b) => +new Date(b.at) - +new Date(a.at))
+
+  return NextResponse.json({ history })
+}
 
 const num = (v: unknown): number | null => {
   if (v === '' || v == null) return null
@@ -34,29 +58,38 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
   const patch: Record<string, unknown> = { updatedAt: new Date() }
   const logs: { action: string; field?: string; oldValue?: string; newValue?: string }[] = []
+  // log การแก้ไขทีละช่อง (เก็บว่าใครแก้เมื่อไหร่ผ่าน userId + created_at)
+  const chg = (field: string, oldV: string | null | undefined, newV: string | null | undefined) => {
+    if ((oldV ?? '') !== (newV ?? '')) logs.push({ action: 'edit', field, oldValue: oldV ?? '', newValue: newV ?? '' })
+  }
+  const chgNum = (field: string, oldV: string | null | undefined, newV: string | null | undefined) => {
+    const o = oldV == null || oldV === '' ? null : Number(oldV), n = newV == null || newV === '' ? null : Number(newV)
+    if (o !== n) logs.push({ action: 'edit', field, oldValue: o == null ? '' : String(o), newValue: n == null ? '' : String(n) })
+  }
 
   if (typeof b.status === 'string' && LEAD_STATUSES.includes(b.status) && b.status !== cur.status) {
     patch.status = b.status
-    logs.push({ action: 'status', field: 'status', oldValue: cur.status, newValue: b.status })
+    logs.push({ action: 'status', field: 'สถานะติดตาม', oldValue: cur.status, newValue: b.status })
   }
   if (typeof b.quote === 'string' && QUOTE_STATUSES.includes(b.quote) && b.quote !== cur.quoteStatus) {
     patch.quoteStatus = b.quote
-    logs.push({ action: 'quote', field: 'quote_status', oldValue: cur.quoteStatus, newValue: b.quote })
+    logs.push({ action: 'quote', field: 'ใบเสนอราคา', oldValue: cur.quoteStatus, newValue: b.quote })
   }
-  if ('phone' in b) patch.phone = normPhone(b.phone)
-  if ('chname' in b) patch.chname = (b.chname ?? '').trim() || null
-  if ('name' in b) patch.name = (b.name ?? '').trim() || null
-  if ('channel' in b) patch.channel = CHANNELS.includes(b.channel) ? b.channel : null
-  if ('province' in b) patch.province = (b.province ?? '').trim() || null
-  if ('detail' in b) patch.detail = (b.detail ?? '').trim() || null
-  if ('cat' in b) patch.cat = b.cat || null
-  if ('d' in b) patch.inquiredAt = /^\d{4}-\d{2}-\d{2}$/.test(String(b.d)) ? b.d : null
+  if ('phone' in b) { const v = normPhone(b.phone); chg('เบอร์โทร', cur.phone, v); patch.phone = v }
+  if ('chname' in b) { const v = (b.chname ?? '').trim() || null; chg('ชื่อช่องทาง', cur.chname, v); patch.chname = v }
+  if ('name' in b) { const v = (b.name ?? '').trim() || null; chg('ชื่อลูกค้า', cur.name, v); patch.name = v }
+  if ('channel' in b) { const v = CHANNELS.includes(b.channel) ? b.channel : null; chg('ช่องทาง', cur.channel, v); patch.channel = v }
+  if ('province' in b) { const v = (b.province ?? '').trim() || null; chg('จังหวัด', cur.province, v); patch.province = v }
+  if ('detail' in b) { const v = (b.detail ?? '').trim() || null; chg('รายละเอียด', cur.detail, v); patch.detail = v }
+  if ('cat' in b) { const v = b.cat || null; chg('ประเภทธุรกิจ', cur.cat, v); patch.cat = v }
+  if ('d' in b) { const v = /^\d{4}-\d{2}-\d{2}$/.test(String(b.d)) ? b.d : null; chg('วันที่รับข้อมูล', cur.inquiredAt, v); patch.inquiredAt = v }
 
   if ('k' in b || 'y' in b || 's' in b || 'sqm' in b) {
     const k = num(b.k), y = num(b.y), s = num(b.s)
     patch.widthM = str(k); patch.lengthM = str(y); patch.heightM = str(s)
     // มี ก×ย → คำนวณให้; ไม่มี → ใช้ ตร.ม. ที่กรอกตรงๆ
     const sqm = k != null && y != null ? k * y : num(b.sqm)
+    chgNum('พื้นที่ (ตร.ม.)', cur.sqm, str(sqm))
     patch.sqm = str(sqm)
     const rates = await getRates()
     if (!isFinal((patch.status as string) ?? cur.status)) patch.amountEst = str(estimate(sqm, cur.bu, rates))
@@ -65,11 +98,22 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const effectiveStatus = (patch.status as string) ?? cur.status
   if ('amount' in b) {
     const amt = num(b.amount)
-    if (isFinal(effectiveStatus)) patch.amountActual = str(amt)
-    else patch.amountEst = str(amt)
+    if (isFinal(effectiveStatus)) { chgNum('มูลค่าจริง', cur.amountActual, str(amt)); patch.amountActual = str(amt) }
+    else { chgNum('มูลค่าประมาณ', cur.amountEst, str(amt)); patch.amountEst = str(amt) }
   }
   if (isFinal(effectiveStatus) && patch.amountActual == null && cur.amountActual == null && !('amount' in b)) {
     if (cur.amountEst) patch.amountActual = cur.amountEst
+  }
+
+  // วันที่ปิดงาน: รับค่าที่กรอกมา + ตั้งเป็นวันนี้อัตโนมัติเมื่อเพิ่งเปลี่ยนเป็นสถานะปิด
+  if ('closedAt' in b) { const v = /^\d{4}-\d{2}-\d{2}$/.test(String(b.closedAt)) ? b.closedAt : null; chg('วันที่ปิดงาน', cur.closedAt, v); patch.closedAt = v }
+  if (isFinal(effectiveStatus)) {
+    if (patch.closedAt == null && cur.closedAt == null) {
+      patch.closedAt = new Date().toISOString().slice(0, 10)
+      logs.push({ action: 'edit', field: 'วันที่ปิดงาน', oldValue: '', newValue: patch.closedAt as string })
+    }
+  } else if (cur.closedAt && !('closedAt' in b)) {
+    patch.closedAt = null // ออกจากสถานะปิด → ล้างวันที่ปิด
   }
 
   await db.update(customers).set(patch).where(eq(customers.id, id))
@@ -83,12 +127,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         customerId: id, type: b.appt.type === 'zoom' ? 'zoom' : 'site',
         apptDate: b.appt.date, apptTime: b.appt.time || null, note: (b.appt.note ?? '').trim() || null, createdBy: me.id,
       })
-      logs.push({ action: 'appt', newValue: `${b.appt.type} ${b.appt.date}` })
+      logs.push({ action: 'appt', field: 'นัดหมาย', newValue: `${b.appt.type === 'zoom' ? 'Zoom' : 'ดูหน้างาน'} ${b.appt.date}` })
     }
   }
 
+  // note = บันทึกการติดตามแบบต่อท้าย (ไม่ลบของเก่า เก็บเป็นประวัติว่าใครโน้ตอะไรเมื่อไหร่)
   if ('note' in b) {
-    await db.delete(notes).where(eq(notes.customerId, id))
     const body = (b.note ?? '').trim()
     if (body) await db.insert(notes).values({ customerId: id, body, createdBy: me.id })
   }

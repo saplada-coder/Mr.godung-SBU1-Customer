@@ -83,7 +83,8 @@ export async function POST(req: Request) {
       cat: b.cat || null,
       widthM: str(k), lengthM: str(y), heightM: str(s), sqm: str(sqm),
       amountEst: str(est), amountActual: isFinal(status) ? str(amount) : null,
-      status, quoteStatus: quote, inquiredAt: b.d || null, ownerId: me.id,
+      status, quoteStatus: quote, inquiredAt: b.d || null,
+      closedAt: isFinal(status) ? (b.d || new Date().toISOString().slice(0, 10)) : null, ownerId: me.id,
     })
     .returning()
 

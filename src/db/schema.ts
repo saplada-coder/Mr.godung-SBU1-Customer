@@ -98,6 +98,7 @@ export const customers = pgTable(
     status: varchar('status', { length: 60 }).$type<LeadStatus>().notNull().default('ลูกค้าใหม่ – รอติดต่อ'),
     quoteStatus: varchar('quote_status', { length: 60 }).$type<QuoteStatus>().notNull().default('ยังไม่ทำใบเสนอราคา'),
     inquiredAt: date('inquired_at'),
+    closedAt: date('closed_at'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     ownerId: integer('owner_id').references(() => users.id),

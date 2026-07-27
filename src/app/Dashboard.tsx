@@ -15,7 +15,7 @@ export type Rec = {
   detail: string | null; cat: string | null
   k: number | null; y: number | null; s: number | null; sqm: number | null
   amountEst: number | null; amountActual: number | null; shownVal: number | null; isFinal: boolean
-  status: string; quote: string; d: string | null
+  status: string; quote: string; d: string | null; closedAt: string | null
   appt: Appt; attachCount: number; noteCount: number
 }
 type Meta = { updated: string; ref: string; refLabel: string; targetYear: string; targetTotal: number; quarters: { q: string; target: number }[] }
@@ -810,12 +810,21 @@ function barChartSvg(bks: { label: string; n: number }[]) {
 }
 
 /* ---------------- Modals ---------------- */
+type HistoryItem = { kind: string; field: string | null; oldValue: string | null; newValue: string | null; text: string | null; at: string; who: string }
+function histLine(h: HistoryItem): string {
+  if (h.kind === 'note') return '📝 ' + (h.text || '')
+  if (h.kind === 'create') return 'สร้างรายการ ' + (h.newValue || '')
+  const f = h.field || 'ข้อมูล'
+  if (h.kind === 'status' || h.kind === 'quote' || (h.kind === 'edit' && h.oldValue)) return `${f}: ${h.oldValue || '(ว่าง)'} → ${h.newValue || '(ว่าง)'}`
+  return `${f}: ${h.newValue || ''}`
+}
 function ManageModal({ rec, me, rateOf, onClose, onSaved, showToast }: {
   rec: Rec; me: Me; rateOf: (bu: string) => number; onClose: () => void; onSaved: () => void; showToast: (m: string) => void
 }) {
   const [status, setStatus] = useState(rec.status)
   const [quote, setQuote] = useState(rec.quote)
   const [amount, setAmount] = useState(rec.shownVal != null ? String(rec.shownVal) : '')
+  const [closedAt, setClosedAt] = useState(rec.closedAt || '')
   const [name, setName] = useState(rec.name || '')
   const [phone, setPhone] = useState(rec.phone || '')
   const [channel, setChannel] = useState(rec.channel || 'FB : Mr.โกดัง')
@@ -834,10 +843,17 @@ function ManageModal({ rec, me, rateOf, onClose, onSaved, showToast }: {
   const [apptNote, setApptNote] = useState(rec.appt?.note || '')
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
+  const [history, setHistory] = useState<HistoryItem[]>([])
+  useEffect(() => {
+    fetch(`/api/customers/${rec.id}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { history: [] })).then((j) => setHistory(j.history || [])).catch(() => {})
+  }, [rec.id])
   const fin = isFinal(status)
   // ตร.ม. ที่จะบันทึก: มี ก×ย → คำนวณ; ไม่มี → ใช้ที่กรอกตรงๆ
   const effSqm = (+k > 0 && +y > 0) ? +k * +y : (+sqm > 0 ? +sqm : null)
   const est = effSqm ? Math.round(effSqm * rateOf(rec.bu)) : null
+  // เปลี่ยนเป็นสถานะปิด → เติมวันที่ปิดเป็นวันนี้ให้อัตโนมัติ (แก้ได้)
+  const onStatusChange = (v: string) => { setStatus(v); if (isFinal(v) && !closedAt) setClosedAt(new Date().toISOString().slice(0, 10)) }
 
   const save = async () => {
     if (status === ST_APPT && !apptDate) { showToast('สถานะนัด ต้องระบุวันที่นัด'); return }
@@ -846,7 +862,7 @@ function ManageModal({ rec, me, rateOf, onClose, onSaved, showToast }: {
     setBusy(true)
     const body: Record<string, unknown> = {
       status, quote, name, phone, channel, chname, province, cat, detail, d: d || null,
-      k: k || null, y: y || null, s: sHt || null, sqm: sqm || null,
+      k: k || null, y: y || null, s: sHt || null, sqm: sqm || null, closedAt: closedAt || null,
       amount: amount === '' ? null : Number(amount),
       appt: apptDate ? { type: apptType || 'site', date: apptDate, time: apptTime, note: apptNote } : null,
     }
@@ -876,8 +892,9 @@ function ManageModal({ rec, me, rateOf, onClose, onSaved, showToast }: {
             <input type="number" value={(+k > 0 && +y > 0) ? String(+k * +y) : sqm} disabled={+k > 0 && +y > 0} onChange={(e) => setSqm(e.target.value)} placeholder="เช่น 300" />
           </div>
           <div className="fs"><div className="fs-t">สถานะ &amp; มูลค่า</div></div>
-          <div className="field"><label>สถานะติดตาม</label><select value={status} onChange={(e) => setStatus(e.target.value)}>{LEAD_STATUSES.map((s) => <option key={s}>{s}</option>)}</select></div>
+          <div className="field"><label>สถานะติดตาม</label><select value={status} onChange={(e) => onStatusChange(e.target.value)}>{LEAD_STATUSES.map((s) => <option key={s}>{s}</option>)}</select></div>
           <div className="field"><label>สถานะใบเสนอราคา</label><select value={quote} onChange={(e) => setQuote(e.target.value)}>{QUOTE_STATUSES.map((s) => <option key={s}>{s}</option>)}</select></div>
+          {fin && <div className="field"><label>วันที่ปิดงาน{isFinal(status) ? ' *' : ''}</label><input type="date" value={closedAt} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setClosedAt(e.target.value)} onClick={(e) => (e.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.()} /><div className="hintline">ตั้งเป็นวันนี้ให้อัตโนมัติ — แก้เป็นวันที่ปิดจริงได้</div></div>}
           <div className="field full"><label>{fin ? 'มูลค่าจริง (บาท) *' : 'มูลค่าประมาณ (บาท)'}</label>
             <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
             <div className="hintline">{est != null ? <>คำนวณ: {commas(effSqm)} ตร.ม. × ฿{commas(rateOf(rec.bu))}/ตร.ม. ({rec.bu}) = <b>฿{commas(est)}</b>{!fin && <> · <button type="button" className="btn-sm" style={{ padding: 0, border: 'none', background: 'none', color: 'var(--accent)', fontWeight: 700, cursor: 'pointer' }} onClick={() => setAmount(String(est))}>ใช้ค่าที่คำนวณ</button></>}</> : 'ไม่มีข้อมูลพื้นที่ จึงคำนวณให้ไม่ได้'}</div>
@@ -887,8 +904,22 @@ function ManageModal({ rec, me, rateOf, onClose, onSaved, showToast }: {
           <div className="field"><label>วันที่นัด</label><input type="date" value={apptDate} onChange={(e) => setApptDate(e.target.value)} /></div>
           <div className="field"><label>เวลานัด</label><input type="time" value={apptTime} onChange={(e) => setApptTime(e.target.value)} /></div>
           <div className="field"><label>โน้ตนัดหมาย</label><input value={apptNote} onChange={(e) => setApptNote(e.target.value)} /></div>
-          <div className="fs"><div className="fs-t">บันทึกการติดตาม</div></div>
-          <div className="field full"><label>โน้ต (สรุปการคุย / ลูกค้าว่ายังไง)</label><textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="เช่น โทรแล้ว ลูกค้าขอคุยกับหุ้นส่วนก่อน" /></div>
+          <div className="fs"><div className="fs-t">บันทึกการติดตาม</div><div className="hintline">โน้ตจะถูกเก็บต่อท้าย พร้อมวันที่และชื่อผู้บันทึก (ไม่ทับของเดิม)</div></div>
+          <div className="field full"><label>เพิ่มโน้ต (สรุปการคุย / ลูกค้าว่ายังไง)</label><textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="เช่น โทรแล้ว ลูกค้าขอคุยกับหุ้นส่วนก่อน" /></div>
+          <div className="fs"><div className="fs-t">ประวัติการแก้ไข &amp; โน้ต</div><div className="hintline">ใครแก้อะไรเมื่อไหร่</div></div>
+          <div className="field full">
+            {history.length === 0
+              ? <div className="hintline">ยังไม่มีประวัติ</div>
+              : <div className="histlist">{history.map((h, i) => (
+                  <div className="histrow" key={i}>
+                    <div className="histdot" />
+                    <div className="histbody">
+                      <div className="histtext">{histLine(h)}</div>
+                      <div className="histmeta">{h.who} · {new Date(h.at).toLocaleString('th-TH', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
+                    </div>
+                  </div>
+                ))}</div>}
+          </div>
         </div>
         <div className="modal-f"><button className="btn" onClick={onClose}>ปิด</button><button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? 'กำลังบันทึก…' : 'บันทึก'}</button></div>
       </div>

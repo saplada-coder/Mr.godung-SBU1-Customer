@@ -140,6 +140,14 @@ nav{display:flex;flex-direction:column;gap:3px}
 .range-clear{border:none;background:none;color:var(--text-faint);cursor:pointer;font-size:12px;padding:2px 4px;border-radius:5px;line-height:1}
 .range-clear:hover{color:var(--text);background:var(--surface-3)}
 
+.histlist{display:flex;flex-direction:column;gap:2px;max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:9px;padding:8px 10px;background:var(--surface-2)}
+.histrow{display:flex;gap:9px;padding:6px 2px;border-bottom:1px solid var(--border)}
+.histrow:last-child{border-bottom:none}
+.histdot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-top:6px}
+.histbody{min-width:0}
+.histtext{font-size:12.5px;color:var(--text);line-height:1.4;word-break:break-word}
+.histmeta{font-size:11px;color:var(--text-faint);margin-top:2px}
+
 .tbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
 .search{flex:1;min-width:170px;position:relative}
 .search input{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:9px 12px 9px 34px;font-size:13.5px;color:var(--text);font-family:inherit}
