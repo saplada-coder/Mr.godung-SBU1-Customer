@@ -61,11 +61,15 @@ export async function POST(req: Request) {
   if (status === ST_APPT && !b.apptDate) return NextResponse.json({ error: 'สถานะนัด ต้องระบุวันที่นัด' }, { status: 400 })
 
   const db = getDb()
+  // รหัสลูกค้า = BU-YYYYMMDD-ลำดับ (ลำดับรันแยกตาม BU+วันที่ เช่น BU1-20260727-001)
+  const dateStr = /^\d{4}-\d{2}-\d{2}$/.test(String(b.d)) ? String(b.d) : new Date().toISOString().slice(0, 10)
+  const ymd = dateStr.replace(/-/g, '')
+  const prefix = `${bu}-${ymd}-`
   const [{ nextSeq }] = (await db
-    .select({ nextSeq: sql<number>`coalesce(max(nullif(regexp_replace(code,'\\D','','g'),''))::int,0)+1` })
+    .select({ nextSeq: sql<number>`coalesce(max(right(code,3)::int),0)+1` })
     .from(customers)
-    .where(sql`code like 'NEW-%'`)) as unknown as [{ nextSeq: number }]
-  const code = `NEW-${String(nextSeq || 1).padStart(4, '0')}`
+    .where(sql`code like ${prefix + '%'}`)) as unknown as [{ nextSeq: number }]
+  const code = `${prefix}${String(nextSeq).padStart(3, '0')}`
 
   const est = isFinal(status) ? null : (amount ?? estimate(sqm, bu, rates))
   const [created] = await db

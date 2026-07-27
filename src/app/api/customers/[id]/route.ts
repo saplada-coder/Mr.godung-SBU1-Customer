@@ -103,7 +103,7 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   const db = getDb()
   const [cur] = await db.select().from(customers).where(eq(customers.id, id)).limit(1)
   if (!cur) return NextResponse.json({ error: 'not found' }, { status: 404 })
-  if (!cur.code.startsWith('NEW-'))
+  if (cur.code.startsWith('QT-'))
     return NextResponse.json({ error: 'ลบได้เฉพาะรายการที่เพิ่มใหม่ (กันลบข้อมูลจากชีท)' }, { status: 400 })
   await db.delete(customers).where(and(eq(customers.id, id)))
   return NextResponse.json({ ok: true })

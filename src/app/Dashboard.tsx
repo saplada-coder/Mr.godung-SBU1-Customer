@@ -130,7 +130,7 @@ export default function Dashboard({ me }: { me: Me }) {
       </div>
 
       {manage && <ManageModal rec={manage} me={me} rateOf={rateOf} onClose={() => setManage(null)} onSaved={() => { setManage(null); load() }} showToast={showToast} />}
-      {addOpen && <AddModal rateOf={rateOf} onClose={() => setAddOpen(false)} onSaved={() => { setAddOpen(false); load() }} showToast={showToast} />}
+      {addOpen && <AddModal records={records} rateOf={rateOf} onClose={() => setAddOpen(false)} onSaved={() => { setAddOpen(false); load() }} showToast={showToast} />}
       {ratesOpen && <RatesModal rates={rates} onClose={() => setRatesOpen(false)} onSaved={(r) => { setRates(r); setRatesOpen(false); load() }} showToast={showToast} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
@@ -467,7 +467,7 @@ function Customers({ records, editable, onManage, onAdd, patch }: {
 }) {
   const [q, setQ] = useState(''); const [fReg, setFReg] = useState(''); const [fStat, setFStat] = useState(''); const [fQuote, setFQuote] = useState(''); const [fMonth, setFMonth] = useState(''); const [fChan, setFChan] = useState('')
   const [from, setFrom] = useState(''); const [to, setTo] = useState('')
-  const [sortK, setSortK] = useState<SortKey>('amount'); const [sortDir, setSortDir] = useState(-1); const [shown, setShown] = useState(40)
+  const [sortK, setSortK] = useState<SortKey>('d'); const [sortDir, setSortDir] = useState(-1); const [shown, setShown] = useState(40)
   const [pop, setPop] = useState<{ r: Rec; kind: 'status' | 'quote'; x: number; y: number } | null>(null)
 
   const months = useMemo(() => [...new Set(records.filter((r) => r.d).map((r) => r.d!.slice(0, 7)))].sort().reverse(), [records])
@@ -499,7 +499,7 @@ function Customers({ records, editable, onManage, onAdd, patch }: {
 
   const setSort = (k: SortKey) => {
     if (sortK === k) setSortDir((d) => -d)
-    else { setSortK(k); setSortDir(k === 'amount' || k === 'sqm' ? -1 : 1) }
+    else { setSortK(k); setSortDir(k === 'amount' || k === 'sqm' || k === 'd' || k === 'apptDate' ? -1 : 1) }
     setShown(40)
   }
   const th = (k: SortKey, label: string, r?: boolean) => (
@@ -539,7 +539,7 @@ function Customers({ records, editable, onManage, onAdd, patch }: {
               return (
                 <tr key={r.id}>
                   <td className="code">{r.code.replace('QT-', '')}</td>
-                  <td className="name">{r.name || r.chname || <span style={{ color: 'var(--text-faint)' }}>(ไม่ระบุชื่อ)</span>}{r.code.startsWith('NEW-') && <span className="tag-new">ใหม่</span>}{r.attachCount > 0 && <span className="clip"> <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M21 12l-9 9a5.5 5.5 0 01-8-8l9-9a3.7 3.7 0 015 5l-9 9a1.8 1.8 0 01-3-2l8-8" /></svg>{r.attachCount}</span>}{phoneTag(r)}{chanTag(r)}{r.province && <span className="prov">{r.province}</span>}</td>
+                  <td className="name">{r.name || r.chname || <span style={{ color: 'var(--text-faint)' }}>(ไม่ระบุชื่อ)</span>}{!r.code.startsWith('QT-') && <span className="tag-new">ใหม่</span>}{r.attachCount > 0 && <span className="clip"> <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M21 12l-9 9a5.5 5.5 0 01-8-8l9-9a3.7 3.7 0 015 5l-9 9a1.8 1.8 0 01-3-2l8-8" /></svg>{r.attachCount}</span>}{phoneTag(r)}{chanTag(r)}{r.province && <span className="prov">{r.province}</span>}</td>
                   <td className="biz">{r.detail ? <span className="dtl" title={r.detail}>{r.detail}</span> : <span className="dtl" style={{ color: 'var(--text-faint)' }}>—</span>}<span className="cat">{r.cat || 'ไม่ระบุ'}</span></td>
                   <td className="size">{sizeCell(r)}</td>
                   <td>{editable ? <button className="pill" style={{ color: sm.c, background: sm.b }} onClick={(e) => openPop(e, r, 'status')}><i style={{ background: sm.c }} />{sm.k}<svg className="pcar" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6}><path d="M6 9l6 6 6-6" /></svg></button> : <span className="pill" style={{ color: sm.c, background: sm.b, cursor: 'default' }}><i style={{ background: sm.c }} />{sm.k}</span>}</td>
@@ -870,8 +870,9 @@ function ManageModal({ rec, me, rateOf, onClose, onSaved, showToast }: {
   )
 }
 
-function AddModal({ rateOf, onClose, onSaved, showToast }: { rateOf: (bu: string) => number; onClose: () => void; onSaved: () => void; showToast: (m: string) => void }) {
-  const [f, setF] = useState({ name: '', phone: '', channel: 'FB : Mr.โกดัง', chname: '', bu: 'BU1', province: '', cat: CATS[0] as string, detail: '', k: '', y: '', s: '', amount: '', d: '2026-07-17', status: ST_NEW as string, quote: 'ยังไม่ทำใบเสนอราคา', apptType: 'zoom', apptDate: '', apptTime: '' })
+function AddModal({ records, rateOf, onClose, onSaved, showToast }: { records: Rec[]; rateOf: (bu: string) => number; onClose: () => void; onSaved: () => void; showToast: (m: string) => void }) {
+  const today = new Date().toISOString().slice(0, 10)
+  const [f, setF] = useState({ name: '', phone: '', channel: 'FB : Mr.โกดัง', chname: '', bu: 'BU1', province: '', cat: CATS[0] as string, detail: '', k: '', y: '', s: '', amount: '', d: today, status: ST_NEW as string, quote: 'ยังไม่ทำใบเสนอราคา', apptType: 'zoom', apptDate: '', apptTime: '' })
   const [busy, setBusy] = useState(false)
   const set = (k: keyof typeof f, v: string) => setF((o) => ({ ...o, [k]: v }))
   const sqm = (+f.k > 0 && +f.y > 0) ? +f.k * +f.y : 0
@@ -879,6 +880,11 @@ function AddModal({ rateOf, onClose, onSaved, showToast }: { rateOf: (bu: string
   const fin = isFinal(f.status)
   const [amtTouched, setAmtTouched] = useState(false)
   const amount = amtTouched ? f.amount : (est != null && !fin ? String(est) : f.amount)
+
+  // รหัสลูกค้าอัตโนมัติ: BU-YYYYMMDD-ลำดับ (ลำดับรันแยกตาม BU+วันที่) — โชว์ล่วงหน้า เลขจริงออกตอนบันทึก
+  const codePrefix = f.d ? `${f.bu}-${f.d.replace(/-/g, '')}-` : ''
+  const nextSeq = codePrefix ? records.filter((r) => r.code.startsWith(codePrefix)).length + 1 : 1
+  const codePreview = codePrefix ? codePrefix + String(nextSeq).padStart(3, '0') : '—'
 
   const save = async () => {
     if (!f.name.trim() && !f.chname.trim()) { showToast('กรอกชื่อลูกค้า หรือชื่อช่องทางอย่างน้อย 1 อย่าง'); return }
@@ -892,8 +898,9 @@ function AddModal({ rateOf, onClose, onSaved, showToast }: { rateOf: (bu: string
   return (
     <div className="modal-bd" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal" role="dialog" aria-modal>
-        <div className="modal-h"><h3>เพิ่มลูกค้าใหม่</h3><button className="modal-x" onClick={onClose}>×</button></div>
+        <div className="modal-h"><div><h3>เพิ่มลูกค้าใหม่</h3><div className="sub">รหัส: <b style={{ color: 'var(--accent)', letterSpacing: '.02em' }}>{codePreview}</b></div></div><button className="modal-x" onClick={onClose}>×</button></div>
         <div className="form">
+          <div className="field"><label>วันที่รับข้อมูล *</label><input type="date" value={f.d} max={today} onChange={(e) => set('d', e.target.value)} onClick={(e) => (e.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.()} /><div className="hintline">ใช้กำหนดรหัสและจัดกลุ่มในกราฟ (ค่าเริ่มต้น = วันนี้)</div></div>
           <div className="field"><label>ชื่อลูกค้า</label><input value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="เช่น คุณสมชาย" /></div>
           <div className="field"><label>เบอร์โทร</label><input value={f.phone} onChange={(e) => set('phone', e.target.value)} inputMode="numeric" placeholder="0812345678" /></div>
           <div className="field"><label>ช่องทางการติดต่อ</label><select value={f.channel} onChange={(e) => set('channel', e.target.value)}>{CHANNELS.map((c) => <option key={c}>{c}</option>)}</select></div>
