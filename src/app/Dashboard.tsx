@@ -251,10 +251,12 @@ function Overview({ records, meta }: { records: Rec[]; meta: Meta }) {
   // quarterly grouped bars
   const closedQ = [0, 0, 0, 0], expectQ = [0, 0, 0, 0]
   rs.forEach((r) => { if (!r.d) return; const i = Math.ceil(+r.d.slice(5, 7) / 3) - 1; if (isFinal(r.status)) closedQ[i] += Mv(r.amountActual || r.amountEst || 0); if (r.status === 'คาดว่าจะได้งาน') expectQ[i] += Mv(r.amountEst || 0) })
+  const sum = (a: number[]) => a.reduce((x, y) => x + y, 0)
+  const withTotal = (vals: number[]) => [...vals, sum(vals)] // แท่งสุดท้าย = รวมทั้ง 4 ไตรมาส
   const series = [
-    ...(showTarget ? [{ name: 'เป้าหมาย', color: 'var(--pending)', vals: meta.quarters.map((q) => q.target) }] : []),
-    { name: 'คาดว่าจะได้งาน', color: '#3f8f3a', vals: expectQ },
-    { name: 'ยอดปิดจริง', color: 'var(--won)', vals: closedQ },
+    ...(showTarget ? [{ name: 'เป้าหมาย', color: 'var(--pending)', vals: withTotal(meta.quarters.map((q) => q.target)) }] : []),
+    { name: 'คาดว่าจะได้งาน', color: '#3f8f3a', vals: withTotal(expectQ) },
+    { name: 'ยอดปิดจริง', color: 'var(--won)', vals: withTotal(closedQ) },
   ]
 
   return (
@@ -278,7 +280,7 @@ function Overview({ records, meta }: { records: Rec[]; meta: Meta }) {
         <section className="card">
           <div className="card-h"><h2>เป้าหมาย vs ยอดปิดงาน รายไตรมาส</h2><span className="hint">ล้านบาท</span></div>
           <p className="card-desc">{showTarget ? `เทียบเป้า (แผนปี ${meta.targetYear}) กับมูลค่าคาดว่าจะได้และยอดปิดจริง — ${label}` : `แสดงเฉพาะมูลค่าคาดว่าจะได้และยอดปิดจริงของ${label}`}</p>
-          <Svg html={groupedBarsSvg(['Q1', 'Q2', 'Q3', 'Q4'], series)} />
+          <Svg html={groupedBarsSvg(['Q1', 'Q2', 'Q3', 'Q4', 'รวม'], series)} />
           <div className="legend">{series.map((s) => <span key={s.name}><i style={{ background: s.color }} />{s.name}</span>)}</div>
         </section>
         <section className="card">
@@ -789,6 +791,8 @@ function groupedBarsSvg(cats: string[], series: { name: string; color: string; v
   for (let g = 0; g <= 4; g++) { const gv = maxv * g / 4, yy = y(gv); s += `<line class="gridline" x1="${padL}" y1="${yy}" x2="${W - padR}" y2="${yy}"/><text class="axis-v" x="${padL - 6}" y="${yy + 3}" text-anchor="end">${gv.toFixed(0)}</text>` }
   cats.forEach((c, gi) => {
     const gx = padL + gi * gw
+    // เส้นคั่นบางๆ ก่อนคอลัมน์ "รวม" ให้เห็นว่าเป็นยอดสรุป ไม่ใช่ไตรมาสถัดไป
+    if (c === 'รวม') s += `<line x1="${gx.toFixed(1)}" y1="${padT}" x2="${gx.toFixed(1)}" y2="${padT + ih}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3"/>`
     series.forEach((se, si) => { const v = se.vals[gi] || 0, bx = gx + (gw - bw * series.length - 8) / 2 + si * (bw + 4), by = y(v), bh = padT + ih - by; s += `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0, bh).toFixed(1)}" rx="2.5" fill="${se.color}"/>`; if (v > 0) s += `<text class="bar-val" x="${(bx + bw / 2).toFixed(1)}" y="${(by - 4).toFixed(1)}" text-anchor="middle">${v.toFixed(v < 10 ? 1 : 0)}</text>` })
     s += `<text class="axis" x="${(gx + gw / 2).toFixed(1)}" y="${H - 8}" text-anchor="middle" font-weight="700">${c}</text>`
   })
