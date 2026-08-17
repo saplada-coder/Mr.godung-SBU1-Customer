@@ -9,15 +9,17 @@ import { commas, fmtB, thDate } from '@/lib/format'
 import { bizGroupedBars, bizSCurve, cumulative, pickImage, type ProjectRow, type ExpenseRow, type InstRow, type HistItem } from './biz-shared'
 
 type Me = { id: number; email: string; name: string | null; image: string | null; role: Role; bu: string | null }
+type Cust = { id: number; code: string; bu: string; name: string | null; chname: string | null; province: string | null; status: string; shownVal: number | null; d: string | null; isFinal: boolean }
 const Svg = ({ html }: { html: string }) => <div dangerouslySetInnerHTML={{ __html: html }} />
 
 /* ================= รายการงานก่อสร้าง + ภาพรวมบริษัท ================= */
-export default function ProjectsView({ me, showToast, onChanged, openProjectId, onOpenedProject }: {
-  me: Me; showToast: (m: string) => void; onChanged: () => void
+export default function ProjectsView({ me, records, showToast, onChanged, openProjectId, onOpenedProject }: {
+  me: Me; records: Cust[]; showToast: (m: string) => void; onChanged: () => void
   openProjectId: number | null; onOpenedProject: () => void
 }) {
   const [projects, setProjects] = useState<ProjectRow[] | null>(null)
   const [openId, setOpenId] = useState<number | null>(null)
+  const [newOpen, setNewOpen] = useState(false)
   const [fStat, setFStat] = useState(''); const [fBu, setFBu] = useState('')
 
   const load = useCallback(async () => {
@@ -45,6 +47,7 @@ export default function ProjectsView({ me, showToast, onChanged, openProjectId, 
         <span className="head-ctrl">
           <select value={fStat} onChange={(e) => setFStat(e.target.value)}><option value="">ทุกสถานะ</option>{PROJECT_STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
           <select value={fBu} onChange={(e) => setFBu(e.target.value)}><option value="">ทุก BU</option>{BUS.map((b) => <option key={b} value={b}>{BU_NAMES[b]}</option>)}</select>
+          {isAdminUp(me.role) && <button className="btn btn-primary" onClick={() => setNewOpen(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}><path d="M12 5v14M5 12h14" /></svg>เปิดงานใหม่</button>}
         </span>
       </div>
 
@@ -106,8 +109,92 @@ export default function ProjectsView({ me, showToast, onChanged, openProjectId, 
         </div>
       )}
 
+      {newOpen && (
+        <NewProjectModal records={records} showToast={showToast}
+          onClose={() => setNewOpen(false)}
+          onCreated={(pid) => { setNewOpen(false); load(); onChanged(); setOpenId(pid) }} />
+      )}
       {openId != null && <ProjectModal id={openId} me={me} showToast={showToast} onClose={() => setOpenId(null)} onChanged={() => { load(); onChanged() }} />}
     </>
+  )
+}
+
+/* ---------------- เปิดงานตรงจากลูกค้า (ไม่มีใบเสนอราคา) ---------------- */
+function NewProjectModal({ records, onClose, onCreated, showToast }: {
+  records: Cust[]; onClose: () => void; onCreated: (id: number) => void; showToast: (m: string) => void
+}) {
+  const [q, setQ] = useState('')
+  const [picked, setPicked] = useState<Cust | null>(null)
+  const [name, setName] = useState('')
+  const [contract, setContract] = useState('')
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10))
+  const [busy, setBusy] = useState(false)
+
+  const list = useMemo(() => {
+    const ql = q.trim().toLowerCase()
+    return records
+      .filter((r) => !ql || `${r.name || ''} ${r.chname || ''} ${r.code}`.toLowerCase().includes(ql))
+      // ลูกค้าที่ปิดการขายแล้วขึ้นก่อน (กลุ่มเป้าหมายหลักของการเปิดงานตรง)
+      .sort((a, b) => (Number(b.isFinal) - Number(a.isFinal)) || ((b.d || '') < (a.d || '') ? -1 : 1))
+      .slice(0, 50)
+  }, [records, q])
+
+  const pick = (r: Cust) => {
+    setPicked(r)
+    setName(r.name || r.chname || r.code)
+    setContract(r.shownVal != null ? String(r.shownVal) : '')
+  }
+  const save = async () => {
+    if (!picked) return
+    if (!(+contract > 0)) { showToast('ระบุมูลค่าสัญญา'); return }
+    setBusy(true)
+    const r = await fetch('/api/projects', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ customerId: picked.id, name, contractAmount: +contract, startDate }) })
+    setBusy(false)
+    const j = await r.json()
+    if (r.ok) { showToast('เปิดงาน ' + j.code + ' แล้ว — ตั้งงบในแท็บงบประมาณ และกดใช้แม่แบบงวดได้เลย'); onCreated(j.id) }
+    else showToast(j.error || 'เปิดงานไม่สำเร็จ')
+  }
+
+  return (
+    <div className="modal-bd" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="modal" role="dialog" aria-modal style={{ maxWidth: 540 }}>
+        <div className="modal-h"><div><h3>เปิดงานใหม่ (ไม่มีใบเสนอราคา)</h3><div className="sub">สำหรับงานที่ปิดการขายไปแล้ว — งบและงวดเงินเริ่มว่าง ไปตั้งต่อในหน้างานได้</div></div><button className="modal-x" onClick={onClose}>×</button></div>
+        <div className="form" style={{ gridTemplateColumns: '1fr' }}>
+          {!picked ? (
+            <>
+              <div className="search" style={{ minWidth: 0 }}>
+                <svg viewBox="0 0 24 24" fill="none" strokeWidth={2}><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหาลูกค้า…" autoFocus />
+              </div>
+              <div className="alist" style={{ maxHeight: 360, overflowY: 'auto' }}>
+                {list.map((r) => (
+                  <div className="arow" key={r.id} style={{ cursor: 'pointer' }} onClick={() => pick(r)}>
+                    <div className="ab" style={{ background: r.isFinal ? '#3f8f3a' : 'var(--text-faint)' }} />
+                    <div className="aw">
+                      <div className="an">{r.name || r.chname || r.code}</div>
+                      <div className="as">{r.code} · {r.status}{r.shownVal ? ` · ฿${commas(r.shownVal)}` : ''}</div>
+                    </div>
+                    <span className="row-btn">เลือก</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="field full"><label>ลูกค้า</label><input readOnly value={`${picked.name || picked.chname || picked.code} (${picked.code})`} /></div>
+              <div className="field full"><label>ชื่องาน *</label><input value={name} onChange={(e) => setName(e.target.value)} /></div>
+              <div className="field full"><label>มูลค่าสัญญา (บาท) *</label><input type="number" value={contract} onChange={(e) => setContract(e.target.value)} /><div className="hintline">ดึงจากมูลค่าในระบบ CRM — แก้ให้ตรงสัญญาจริงได้</div></div>
+              <div className="field full"><label>วันเริ่มงาน</label><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></div>
+            </>
+          )}
+        </div>
+        <div className="modal-f">
+          {picked && <button className="btn" style={{ marginRight: 'auto' }} onClick={() => setPicked(null)}>← เปลี่ยนลูกค้า</button>}
+          <button className="btn" onClick={onClose}>ยกเลิก</button>
+          {picked && <button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? 'กำลังเปิดงาน…' : '🏗 เปิดงาน'}</button>}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -178,6 +265,7 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
   const [busy, setBusy] = useState(false)
   const [expOpen, setExpOpen] = useState<ExpenseRow | 'new' | null>(null)
   const [lightbox, setLightbox] = useState<string | null>(null)
+  const [expCat, setExpCat] = useState(''); const [expStat, setExpStat] = useState('')
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/projects/${id}`, { cache: 'no-store' })
@@ -336,7 +424,19 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
                 </div>
               )
             })}
-            {!d.installments.length && <div className="empty">งานนี้ไม่มีงวดเงิน</div>}
+            {!d.installments.length && (
+              <div className="empty">
+                งานนี้ยังไม่มีงวดเงิน
+                {editable && (
+                  <div style={{ marginTop: 12 }}>
+                    <button className="btn btn-primary btn-sm" disabled={busy}
+                      onClick={() => patch({ action: 'seedInstallments' }, 'ตั้งงวดมาตรฐาน 9 งวดแล้ว')}>
+                      ใช้แม่แบบ 9 งวด (30/10×6/5/5) จากมูลค่าสัญญา
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -345,9 +445,13 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
           <div className="form" style={{ gridTemplateColumns: '1fr' }}>
             <div className="field full" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
               <div className="hintline">อนุมัติแล้ว ฿{commas(spent)} · รออนุมัติ ฿{commas(pendingAmt)} — ยอดเข้างบนับเฉพาะที่อนุมัติแล้ว</div>
-              {editable && <button className="btn btn-primary btn-sm" onClick={() => setExpOpen('new')}>+ บันทึกค่าใช้จ่าย</button>}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <select value={expCat} onChange={(e) => setExpCat(e.target.value)}><option value="">ทุกหมวด</option>{COST_CATS.map((c) => <option key={c.k} value={c.k}>{c.label}</option>)}</select>
+                <select value={expStat} onChange={(e) => setExpStat(e.target.value)}><option value="">ทุกสถานะ</option>{['รออนุมัติ', 'อนุมัติแล้ว', 'ตีกลับ'].map((s) => <option key={s}>{s}</option>)}</select>
+                {editable && <button className="btn btn-primary btn-sm" onClick={() => setExpOpen('new')}>+ บันทึกค่าใช้จ่าย</button>}
+              </div>
             </div>
-            {d.expenses.map((e) => {
+            {d.expenses.filter((e) => (!expCat || e.category === expCat) && (!expStat || e.status === expStat)).map((e) => {
               const em = expMeta(e.status), cm = costCatMeta(e.category)
               const canRowEdit = editable && (admin || (e.createdBy === me.id && e.status !== 'อนุมัติแล้ว'))
               return (
@@ -396,6 +500,7 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
 
         {expOpen && (
           <ExpenseModal projectId={id} exp={expOpen === 'new' ? null : expOpen} admin={admin}
+            budgetInfo={(cat) => ({ budget: budgetOf(cat), spent: spentOf(cat) })}
             onClose={() => setExpOpen(null)}
             onSaved={() => { setExpOpen(null); load(); onChanged() }} showToast={showToast} />
         )}
@@ -475,8 +580,9 @@ function BudgetTab({ d, admin, editable, busy, onSave }: {
 }
 
 /* ---------------- ฟอร์มบันทึก/แก้ไขค่าใช้จ่าย ---------------- */
-function ExpenseModal({ projectId, exp, admin, onClose, onSaved, showToast }: {
+function ExpenseModal({ projectId, exp, admin, budgetInfo, onClose, onSaved, showToast }: {
   projectId: number; exp: ExpenseRow | null; admin: boolean
+  budgetInfo: (cat: string) => { budget: number; spent: number }
   onClose: () => void; onSaved: () => void; showToast: (m: string) => void
 }) {
   const today = new Date().toISOString().slice(0, 10)
@@ -486,6 +592,14 @@ function ExpenseModal({ projectId, exp, admin, onClose, onSaved, showToast }: {
   })
   const [receipt, setReceipt] = useState<string | null>(exp?.receiptUrl || null)
   const [busy, setBusy] = useState(false)
+
+  // เตือนทันทีตอนกรอก ถ้ารายการนี้จะทำให้หมวดเกินงบ (ไม่บล็อก — ขึ้นธงแดงให้คนอนุมัติเห็น)
+  const bi = budgetInfo(f.category)
+  const amt = +f.amount || 0
+  // ถ้าแก้รายการที่อนุมัติแล้วในหมวดเดิม ยอดเดิมถูกนับใน spent อยู่แล้ว — หักออกก่อนเทียบ
+  const prevCounted = exp && exp.status === 'อนุมัติแล้ว' && exp.category === f.category ? exp.amount : 0
+  const willBe = bi.spent - prevCounted + amt
+  const overBudget = bi.budget > 0 && amt > 0 && willBe > bi.budget
 
   const save = async () => {
     if (!f.description.trim()) { showToast('ระบุรายละเอียดค่าใช้จ่าย'); return }
@@ -521,7 +635,14 @@ function ExpenseModal({ projectId, exp, admin, onClose, onSaved, showToast }: {
           <div className="field"><label>วันที่จ่าย *</label><input type="date" value={f.expenseDate} max={today} onChange={(e) => setF((o) => ({ ...o, expenseDate: e.target.value }))} /></div>
           <div className="field full"><label>รายละเอียด *</label><input value={f.description} onChange={(e) => setF((o) => ({ ...o, description: e.target.value }))} placeholder="เช่น เหล็ก H-Beam 20 ท่อน / ค่าแรงทีมเชื่อม งวด 1" autoFocus={!exp} /></div>
           <div className="field"><label>ร้าน / ผู้รับเงิน</label><input value={f.vendor} onChange={(e) => setF((o) => ({ ...o, vendor: e.target.value }))} /></div>
-          <div className="field"><label>จำนวนเงิน (บาท) *</label><input type="number" value={f.amount} onChange={(e) => setF((o) => ({ ...o, amount: e.target.value }))} /></div>
+          <div className="field"><label>จำนวนเงิน (บาท) *</label><input type="number" value={f.amount} onChange={(e) => setF((o) => ({ ...o, amount: e.target.value }))} style={overBudget ? { outline: '2px solid #b0281c' } : undefined} /></div>
+          {overBudget && (
+            <div className="field full">
+              <div className="rejbox">⚠ รายการนี้จะทำให้หมวด &quot;{COST_CATS.find((c) => c.k === f.category)?.label}&quot; เกินงบ!
+                — งบ ฿{commas(bi.budget)} · ใช้ไปแล้ว ฿{commas(bi.spent - prevCounted)} · บันทึกแล้วจะเป็น ฿{commas(willBe)} (เกิน ฿{commas(willBe - bi.budget)})
+                <br />บันทึกได้ตามปกติ แต่ธงแดงนี้จะไปโผล่ให้ผู้อนุมัติเห็น</div>
+            </div>
+          )}
           <div className="field full"><label>บิล / สลิป</label>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               {receipt && (

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
-import { desc, eq, inArray } from 'drizzle-orm'
+import { desc, eq, inArray, and } from 'drizzle-orm'
 import { getDb } from '@/db'
-import { quotations, quotationItems, quotationCosts, expenses, projects, customers, users } from '@/db/schema'
+import { quotations, quotationItems, quotationCosts, expenses, projects, projectBudgets, customers, users } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
 import { quoteTotals, n0 } from '@/lib/biz'
 
@@ -29,6 +29,15 @@ export async function GET() {
   const projMap = new Map(projs.map((p) => [p.id, p]))
   const userMap = new Map(allUsers.map((u) => [u.id, u.name || u.email]))
 
+  // ธงแดง "เกินงบ": เทียบยอดที่จะเข้าหมวด (อนุมัติแล้ว + รายการนี้) กับงบของหมวดในงานนั้น
+  const pids = [...new Set(pe.map((e) => e.projectId).filter((x): x is number => x != null))]
+  const [budgets, approvedExps] = await Promise.all([
+    pids.length ? db.select().from(projectBudgets).where(inArray(projectBudgets.projectId, pids)) : Promise.resolve([]),
+    pids.length ? db.select().from(expenses).where(and(inArray(expenses.projectId, pids), eq(expenses.status, 'อนุมัติแล้ว'))) : Promise.resolve([]),
+  ])
+  const budgetOf = (pid: number, cat: string) => budgets.filter((x) => x.projectId === pid && x.category === cat).reduce((a, x) => a + n0(x.amount), 0)
+  const spentOf = (pid: number, cat: string) => approvedExps.filter((x) => x.projectId === pid && x.category === cat).reduce((a, x) => a + n0(x.amount), 0)
+
   return NextResponse.json({
     quotes: pq.map((q) => {
       const t = quoteTotals(q, items.filter((i) => i.quotationId === q.id), costs.filter((c) => c.quotationId === q.id))
@@ -39,12 +48,16 @@ export async function GET() {
       }
     }),
     expenses: pe.map((e) => {
-      const p = projMap.get(e.projectId)
+      const p = e.projectId != null ? projMap.get(e.projectId) : undefined
+      const budget = e.projectId != null ? budgetOf(e.projectId, e.category) : 0
+      const willBe = e.projectId != null ? spentOf(e.projectId, e.category) + n0(e.amount) : 0
       return {
-        id: e.id, projectId: e.projectId, projectName: p?.name || p?.code || '—',
+        // projectId null = ค่าใช้จ่ายสำนักงาน
+        id: e.id, projectId: e.projectId, projectName: e.projectId == null ? '🏢 สำนักงาน' : p?.name || p?.code || '—',
         category: e.category, description: e.description, vendor: e.vendor,
         amount: n0(e.amount), expenseDate: e.expenseDate, receiptUrl: e.receiptUrl,
         createdByName: e.createdBy ? userMap.get(e.createdBy) : null, createdAt: e.createdAt,
+        overBudget: budget > 0 && willBe > budget, overBy: budget > 0 ? Math.max(0, willBe - budget) : 0,
       }
     }),
   })

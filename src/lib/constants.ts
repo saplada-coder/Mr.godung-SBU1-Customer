@@ -102,7 +102,22 @@ export const COST_CATS = [
 ] as const
 export type CostCat = (typeof COST_CATS)[number]['k']
 export const COST_CAT_KEYS: string[] = COST_CATS.map((c) => c.k)
-export const costCatMeta = (k: string) => COST_CATS.find((c) => c.k === k) ?? COST_CATS[5]
+
+/** หมวดค่าใช้จ่ายสำนักงาน (expenses ที่ไม่ผูกกับงานลูกค้า) */
+export const OFFICE_CATS = [
+  { k: 'salary', label: 'เงินเดือน / ค่าจ้าง', c: '#2563c9' },
+  { k: 'rent', label: 'ค่าเช่า', c: '#8b2fb5' },
+  { k: 'utilities', label: 'น้ำ / ไฟ / เน็ต / โทรศัพท์', c: '#c2610a' },
+  { k: 'marketing', label: 'การตลาด / โฆษณา', c: '#c0399a' },
+  { k: 'office', label: 'อุปกรณ์ / ของใช้สำนักงาน', c: '#3f8f3a' },
+  { k: 'other', label: 'อื่นๆ', c: '#5f6b76' },
+] as const
+export const OFFICE_CAT_KEYS: string[] = OFFICE_CATS.map((c) => c.k)
+/** หมวดที่ใช้ได้ในตาราง expenses ทั้งหมด (โครงการ + สำนักงาน) */
+export const ALL_EXPENSE_CAT_KEYS: string[] = [...new Set([...COST_CAT_KEYS, ...OFFICE_CAT_KEYS])]
+/** หา meta ของหมวด — ค้นทั้งฝั่งโครงการและสำนักงาน */
+export const costCatMeta = (k: string) =>
+  COST_CATS.find((c) => c.k === k) ?? OFFICE_CATS.find((c) => c.k === k) ?? COST_CATS[5]
 
 /** สถานะเอกสารใบเสนอราคา + สี */
 export const QDOCS = [

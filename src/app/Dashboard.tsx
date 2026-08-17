@@ -10,6 +10,7 @@ import { commas, fmtB, Mv, TH_MONTHS, DAY, toMs, toStr, weekStart, thDate, daysB
 import QuotesView, { CompanySettingsModal, SignatureModal } from './QuotesView'
 import ProjectsView from './ProjectsView'
 import ApprovalsView from './ApprovalsView'
+import OfficeExpensesView from './OfficeExpensesView'
 
 type Appt = { type: string; date: string; time: string; note: string } | null
 export type Rec = {
@@ -23,8 +24,8 @@ export type Rec = {
 }
 type Meta = { updated: string; ref: string; refLabel: string; targetYear: string; targetTotal: number; quarters: { q: string; target: number }[] }
 type Me = { id: number; email: string; name: string | null; image: string | null; role: Role; bu: string | null }
-type View = 'overview' | 'alerts' | 'intake' | 'regions' | 'customers' | 'quotes' | 'projects' | 'approvals' | 'users'
-const TITLES: Record<View, string> = { overview: 'ภาพรวม', alerts: 'แจ้งเตือน', intake: 'ลูกค้าเข้าใหม่', regions: 'ภูมิภาค (BU)', customers: 'รายการลูกค้า', quotes: 'ใบเสนอราคา', projects: 'งานก่อสร้าง', approvals: 'รออนุมัติ', users: 'จัดการผู้ใช้' }
+type View = 'overview' | 'alerts' | 'intake' | 'regions' | 'customers' | 'quotes' | 'projects' | 'office' | 'approvals' | 'users'
+const TITLES: Record<View, string> = { overview: 'ภาพรวม', alerts: 'แจ้งเตือน', intake: 'ลูกค้าเข้าใหม่', regions: 'ภูมิภาค (BU)', customers: 'รายการลูกค้า', quotes: 'ใบเสนอราคา', projects: 'งานก่อสร้าง', office: 'ค่าใช้จ่ายสำนักงาน', approvals: 'รออนุมัติ', users: 'จัดการผู้ใช้' }
 const CACHE_KEY = 'sbu1-dash-cache-v1'
 const REF = () => toMs('2026-07-15') // อ้างอิงข้อมูลล่าสุด
 const NOW = () => Date.UTC(2026, 6, 17)
@@ -143,7 +144,8 @@ export default function Dashboard({ me }: { me: Me }) {
           {view === 'intake' && <Intake records={records} />}
           {view === 'regions' && <Regions records={records} />}
           {view === 'quotes' && <QuotesView me={me} records={records} showToast={showToast} onChanged={bizChanged} onOpenProject={openProject} />}
-          {view === 'projects' && <ProjectsView me={me} showToast={showToast} onChanged={bizChanged} openProjectId={gotoProjectId} onOpenedProject={() => setGotoProjectId(null)} />}
+          {view === 'projects' && <ProjectsView me={me} records={records} showToast={showToast} onChanged={bizChanged} openProjectId={gotoProjectId} onOpenedProject={() => setGotoProjectId(null)} />}
+          {view === 'office' && <OfficeExpensesView me={me} showToast={showToast} onChanged={bizChanged} />}
           {view === 'approvals' && <ApprovalsView me={me} showToast={showToast} onChanged={bizChanged} onOpenProject={openProject} />}
           {view === 'users' && canManageUsers(me.role) && <UsersView me={me} showToast={showToast} />}
           {view === 'customers' && (
@@ -192,6 +194,7 @@ function Sidebar({ me, view, records, apprCount, onNav, onRates, onCoSettings, o
         <div className="nav-lbl">ขาย &amp; ก่อสร้าง</div>
         {item('quotes', 'ใบเสนอราคา', <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h5" /></svg>)}
         {item('projects', 'งานก่อสร้าง', <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 21h18M5 21V8l7-5 7 5v13" /><path d="M9 21v-6h6v6M9 11h.01M15 11h.01" /></svg>)}
+        {item('office', 'ค่าใช้จ่ายสำนักงาน', <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2M3 12h18" /><path d="M12 12v3" /></svg>)}
         {item('approvals', 'รออนุมัติ', <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11l3 3 8-8" /><path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h11" /></svg>, apprCount ? <span className="alert-badge">{apprCount}</span> : null)}
         {canManageUsers(me.role) && item('users', 'จัดการผู้ใช้', <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="9" cy="7" r="3.4" /><path d="M2.5 20v-1.6a4 4 0 014-4h5a4 4 0 014 4V20" /><circle cx="17.5" cy="14.5" r="2.2" /><path d="M17.5 10.8v1.5M17.5 16.7v1.5M14.3 14.5h1.5M19.2 14.5h1.5" /></svg>)}
       </nav>

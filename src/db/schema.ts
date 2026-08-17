@@ -49,8 +49,14 @@ export const QUOTE_STATUSES = [
 ] as const
 export type QuoteStatus = (typeof QUOTE_STATUSES)[number]
 
-/** หมวดต้นทุน 6 หมวด — ใช้ร่วมกันทั้งประมาณการในใบเสนอราคา งบประมาณ และค่าใช้จ่ายจริง */
-export const costCatEnum = pgEnum('cost_cat', ['material', 'labor', 'subcontract', 'equipment', 'transport', 'other'])
+/**
+ * หมวดต้นทุน — 6 หมวดแรกใช้กับงานก่อสร้าง (ประมาณการ/งบ/รายจ่ายโครงการ)
+ * 5 หมวดท้ายใช้กับค่าใช้จ่ายสำนักงาน (expenses ที่ project_id เป็น null)
+ */
+export const costCatEnum = pgEnum('cost_cat', [
+  'material', 'labor', 'subcontract', 'equipment', 'transport', 'other',
+  'salary', 'rent', 'utilities', 'marketing', 'office',
+])
 
 /** สถานะเอกสารใบเสนอราคา (varchar เหตุผลเดียวกับ LEAD_STATUSES — ข้อความไทยยาวเกิน pg enum) */
 export const QDOC_STATUSES = [
@@ -347,12 +353,15 @@ export const projectBudgets = pgTable(
   (t) => [index('pbudgets_project_idx').on(t.projectId)],
 )
 
-/** ค่าใช้จ่ายจริง (ค่าวัสดุ/ค่าแรง/อื่นๆ แยกด้วย category) — นับเข้างบเมื่ออนุมัติแล้วเท่านั้น */
+/**
+ * ค่าใช้จ่ายจริง (แยกหมวดด้วย category) — นับเข้างบเมื่ออนุมัติแล้วเท่านั้น
+ * projectId เป็น null = ค่าใช้จ่ายสำนักงาน (ไม่ผูกกับงานลูกค้า)
+ */
 export const expenses = pgTable(
   'expenses',
   {
     id: serial('id').primaryKey(),
-    projectId: integer('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+    projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }),
     category: costCatEnum('category').notNull(),
     description: text('description').notNull(),
     vendor: varchar('vendor', { length: 160 }),

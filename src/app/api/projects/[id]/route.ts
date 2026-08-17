@@ -4,7 +4,7 @@ import { getDb } from '@/db'
 import { projects, projectBudgets, projectInstallments, expenses, customers, users, activityLog } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
 import { n0, num, today } from '@/lib/biz'
-import { canEdit, canApprove, isAdminUp, COST_CAT_KEYS, PROJECT_STATUSES } from '@/lib/constants'
+import { canEdit, canApprove, isAdminUp, COST_CAT_KEYS, PROJECT_STATUSES, DEFAULT_INSTALLMENTS } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
@@ -90,6 +90,19 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   }
 
   if (cur.status === 'ปิดงาน') return NextResponse.json({ error: 'งานปิดแล้ว แก้ไขไม่ได้ (เจ้าของปลดล็อกได้)' }, { status: 400 })
+
+  /* ---- ตั้งงวดมาตรฐาน 9 งวดจากมูลค่าสัญญา (สำหรับงานที่เปิดตรง ยังไม่มีงวด) ---- */
+  if (b.action === 'seedInstallments') {
+    const existing = await db.select().from(projectInstallments).where(eq(projectInstallments.projectId, id))
+    if (existing.length) return NextResponse.json({ error: 'งานนี้มีงวดอยู่แล้ว' }, { status: 400 })
+    const contract = n0(cur.contractAmount)
+    await db.insert(projectInstallments).values(DEFAULT_INSTALLMENTS.map((d, i) => ({
+      projectId: id, seq: i + 1, title: d.title, detail: d.detail,
+      percent: String(d.percent), amount: String(Math.round(contract * d.percent / 100)), note: d.note || null,
+    })))
+    await log('installment', 'งวดงาน', undefined, `ตั้งงวดมาตรฐาน ${DEFAULT_INSTALLMENTS.length} งวดจากสัญญา ฿${contract.toLocaleString()}`)
+    return NextResponse.json({ ok: true })
+  }
 
   /* ---- แก้ข้อมูลงาน ---- */
   const patch: Record<string, unknown> = { updatedAt: new Date() }
