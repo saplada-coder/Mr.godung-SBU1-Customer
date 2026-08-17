@@ -262,3 +262,59 @@ th.act,td.act{width:56px}td.act{text-align:center}
 }
 @media (max-width:520px){.statgrid4{grid-template-columns:1fr}.form{grid-template-columns:1fr}.rrow{grid-template-columns:80px 1fr auto}.srow{grid-template-columns:78px 1fr}.frow{grid-template-columns:126px 1fr 40px}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ================= ใบเสนอราคา & Budget Control ================= */
+.tabs{display:flex;gap:4px;padding:12px 20px 0;border-bottom:1px solid var(--border);position:sticky;top:63px;background:var(--surface);z-index:2;flex-wrap:wrap}
+.tabs button{border:none;background:none;color:var(--text-dim);font-size:13px;font-weight:650;padding:9px 14px;cursor:pointer;border-radius:9px 9px 0 0;border-bottom:2px solid transparent;font-family:inherit;white-space:nowrap}
+.tabs button:hover{color:var(--text)}
+.tabs button.on{color:var(--accent);border-bottom-color:var(--accent)}
+
+.qitems{display:flex;flex-direction:column;gap:6px}
+.qi-h,.qi-r{display:grid;grid-template-columns:22px 1fr 72px 64px 88px 100px 110px 24px;gap:6px;align-items:center}
+.qi-h{font-size:10.5px;color:var(--text-faint);font-weight:700}
+.qi-r input{background:var(--surface-2);border:1px solid var(--border);border-radius:7px;padding:7px 9px;font-size:12.5px;color:var(--text);min-width:0;width:100%}
+.qi-r input:disabled{opacity:.7}
+.qi-n{font-size:11.5px;color:var(--text-faint);text-align:center;font-weight:700}
+.qi-x{border:none;background:none;color:var(--text-faint);cursor:pointer;font-size:15px;padding:2px 5px;border-radius:6px;line-height:1}
+.qi-x:hover{color:#b0281c;background:var(--surface-2)}
+
+.qinsts{display:flex;flex-direction:column;gap:10px}
+.qin-r{border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--surface-2);display:flex;flex-direction:column;gap:7px}
+.qin-top{display:grid;grid-template-columns:1fr 74px 16px 120px 24px;gap:6px;align-items:center}
+.qin-r input,.qin-r textarea{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:7px 9px;font-size:12.5px;color:var(--text);width:100%;font-family:inherit;resize:vertical}
+.qin-r input:disabled,.qin-r textarea:disabled{opacity:.7}
+.qin-title{font-weight:700}
+.qin-pcts{font-size:12px;color:var(--text-faint)}
+
+.sumbox{background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:12px 16px;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.sumbox>div{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.sumbox .grand{border-top:1px solid var(--border);padding-top:7px;font-size:14.5px}
+.sumbox .grand b{color:var(--accent)}
+
+.rejbox{background:#f4dbd7;color:#b0281c;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:600}
+.okbox{background:#dcedd2;color:#3f8f3a;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:600;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+.pj-bars{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.pj-bar{display:flex;flex-direction:column;gap:3px}
+.pj-bar span{font-size:10.5px;color:var(--text-faint);font-weight:600;white-space:nowrap}
+.pj-bar b{font-size:11.5px}
+.pj-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.pj-kpi{background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:11px 13px;display:flex;flex-direction:column;gap:3px}
+.pj-kpi span{font-size:11px;color:var(--text-dim);font-weight:600}
+.pj-kpi b{font-size:17px;letter-spacing:-.01em}
+.pj-kpi small{font-size:10.5px;color:var(--text-faint)}
+
+.budrow{display:grid;grid-template-columns:170px 1fr 130px;gap:12px;align-items:center;grid-column:1/-1}
+.bud-l{font-size:12.5px;font-weight:650;display:flex;align-items:center;gap:8px;color:var(--text-dim)}
+.bud-l i{width:10px;height:10px;border-radius:3px;flex:none}
+.bud-mid{display:flex;flex-direction:column;gap:4px;min-width:0}
+.bud-nums{font-size:11px;color:var(--text-faint)}
+
+@media (max-width:700px){
+  .qi-h{display:none}
+  .qi-r{grid-template-columns:1fr 1fr;gap:6px}
+  .qi-r input:first-of-type{grid-column:1/-1}
+  .pj-bars,.pj-kpis{grid-template-columns:1fr 1fr}
+  .budrow{grid-template-columns:1fr;gap:6px}
+  .tabs{top:56px}
+}

@@ -11,14 +11,27 @@ export const dynamic = 'force-dynamic'
 const clerkErr = (e: unknown, fallback: string) =>
   (e as { errors?: { longMessage?: string }[] })?.errors?.[0]?.longMessage || (e as Error).message || fallback
 
+/** ข้อมูลย่อของผู้ใช้ 1 คน (ลายเซ็น) — ดูของตัวเองได้ทุกบทบาท, admin ดูได้ทุกคน */
+export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const me = await getSessionUser()
+  if (!me || !me.active) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const id = Number((await ctx.params).id)
+  if (id !== me.id && !canManageUsers(me.role)) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  const [u] = await getDb().select().from(users).where(eq(users.id, id)).limit(1)
+  if (!u) return NextResponse.json({ error: 'not found' }, { status: 404 })
+  return NextResponse.json({ id: u.id, name: u.name, signatureUrl: u.signatureUrl })
+}
+
 /** แก้ไขผู้ใช้: บทบาท / BU / ระงับ-เปิดใช้ / ตั้งรหัสผ่านใหม่ (เจ้าของ+ผู้ดูแลระบบทำได้เสมอ) */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const me = await getSessionUser()
   if (!me || !me.active) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  if (!canManageUsers(me.role)) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
   const id = Number((await ctx.params).id)
   const b = await req.json()
+  // ลายเซ็นของตัวเอง ตั้งได้ทุกบทบาท — ที่เหลือต้องเป็นเจ้าของ/ผู้ดูแลระบบ
+  const selfSignatureOnly = id === me.id && Object.keys(b).every((k) => k === 'signatureUrl')
+  if (!canManageUsers(me.role) && !selfSignatureOnly) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   const db = getDb()
   const [target] = await db.select().from(users).where(eq(users.id, id)).limit(1)
   if (!target) return NextResponse.json({ error: 'not found' }, { status: 404 })
@@ -38,6 +51,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     patch.role = b.role as Role
   }
   if ('bu' in b) patch.bu = (BUS as readonly string[]).includes(b.bu) ? b.bu : null
+  if ('signatureUrl' in b) {
+    const v = typeof b.signatureUrl === 'string' ? b.signatureUrl : null
+    if (v && (!v.startsWith('data:image/') || v.length > 600_000))
+      return NextResponse.json({ error: 'ลายเซ็นต้องเป็นรูปภาพขนาดไม่เกิน ~400KB' }, { status: 400 })
+    patch.signatureUrl = v || null
+  }
   if ('active' in b) {
     if (target.id === me.id && !b.active)
       return NextResponse.json({ error: 'ระงับบัญชีตัวเองไม่ได้' }, { status: 400 })

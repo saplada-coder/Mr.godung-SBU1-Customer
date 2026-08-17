@@ -7,6 +7,9 @@ import {
   DEFAULT_RATES, ROLES, ROLE_LABEL, canEdit, canManageUsers, isAdminUp, isFinal, stMeta, qMeta, ST_APPT, ST_NEW, type Role,
 } from '@/lib/constants'
 import { commas, fmtB, Mv, TH_MONTHS, DAY, toMs, toStr, weekStart, thDate, daysBetween, fmtPhone } from '@/lib/format'
+import QuotesView, { CompanySettingsModal, SignatureModal } from './QuotesView'
+import ProjectsView from './ProjectsView'
+import ApprovalsView from './ApprovalsView'
 
 type Appt = { type: string; date: string; time: string; note: string } | null
 export type Rec = {
@@ -20,8 +23,8 @@ export type Rec = {
 }
 type Meta = { updated: string; ref: string; refLabel: string; targetYear: string; targetTotal: number; quarters: { q: string; target: number }[] }
 type Me = { id: number; email: string; name: string | null; image: string | null; role: Role; bu: string | null }
-type View = 'overview' | 'alerts' | 'intake' | 'regions' | 'customers' | 'users'
-const TITLES: Record<View, string> = { overview: 'ภาพรวม', alerts: 'แจ้งเตือน', intake: 'ลูกค้าเข้าใหม่', regions: 'ภูมิภาค (BU)', customers: 'รายการลูกค้า', users: 'จัดการผู้ใช้' }
+type View = 'overview' | 'alerts' | 'intake' | 'regions' | 'customers' | 'quotes' | 'projects' | 'approvals' | 'users'
+const TITLES: Record<View, string> = { overview: 'ภาพรวม', alerts: 'แจ้งเตือน', intake: 'ลูกค้าเข้าใหม่', regions: 'ภูมิภาค (BU)', customers: 'รายการลูกค้า', quotes: 'ใบเสนอราคา', projects: 'งานก่อสร้าง', approvals: 'รออนุมัติ', users: 'จัดการผู้ใช้' }
 const CACHE_KEY = 'sbu1-dash-cache-v1'
 const REF = () => toMs('2026-07-15') // อ้างอิงข้อมูลล่าสุด
 const NOW = () => Date.UTC(2026, 6, 17)
@@ -66,6 +69,11 @@ export default function Dashboard({ me }: { me: Me }) {
   const [manage, setManage] = useState<Rec | null>(null)
   const [addOpen, setAddOpen] = useState(false)
   const [ratesOpen, setRatesOpen] = useState(false)
+  const [coSettingsOpen, setCoSettingsOpen] = useState(false)
+  const [sigOpen, setSigOpen] = useState(false)
+  const [apprCount, setApprCount] = useState(0)
+  // เปิดงานก่อสร้างข้ามหน้า (จากใบเสนอราคา/กล่องอนุมัติ) — ส่ง id ให้ ProjectsView เปิดโมดัลต่อ
+  const [gotoProjectId, setGotoProjectId] = useState<number | null>(null)
   const toastT = useRef<ReturnType<typeof setTimeout> | null>(null)
   const editable = canEdit(me.role)
 
@@ -91,6 +99,17 @@ export default function Dashboard({ me }: { me: Me }) {
     load()
   }, [load])
 
+  // จำนวนรออนุมัติ (badge ที่ sidebar) — รีเฟรชเมื่อฝั่งใบเสนอ/งานมีการเปลี่ยนแปลง
+  const loadApprCount = useCallback(async () => {
+    try {
+      const r = await fetch('/api/approvals', { cache: 'no-store' })
+      if (r.ok) { const j = await r.json(); setApprCount((j.quotes?.length || 0) + (j.expenses?.length || 0)) }
+    } catch { /* เงียบไว้ */ }
+  }, [])
+  useEffect(() => { loadApprCount() }, [loadApprCount])
+  const bizChanged = useCallback(() => { loadApprCount(); load() }, [loadApprCount, load])
+  const openProject = useCallback((pid: number) => { setGotoProjectId(pid); setView('projects'); window.scrollTo(0, 0) }, [])
+
   const rateOf = useCallback((bu: string) => rates[bu] ?? DEFAULT_RATES[bu as keyof typeof DEFAULT_RATES] ?? 5500, [rates])
 
   if (loading || !meta) {
@@ -100,9 +119,11 @@ export default function Dashboard({ me }: { me: Me }) {
 
   return (
     <div className={'app' + (navOpen ? ' nav-open' : '')}>
-      <Sidebar me={me} view={view} records={records}
+      <Sidebar me={me} view={view} records={records} apprCount={apprCount}
         onNav={(v) => { setView(v); setNavOpen(false); window.scrollTo(0, 0) }}
-        onRates={isAdminUp(me.role) ? () => { setRatesOpen(true); setNavOpen(false) } : undefined} />
+        onRates={isAdminUp(me.role) ? () => { setRatesOpen(true); setNavOpen(false) } : undefined}
+        onCoSettings={isAdminUp(me.role) ? () => { setCoSettingsOpen(true); setNavOpen(false) } : undefined}
+        onSignature={canEdit(me.role) ? () => { setSigOpen(true); setNavOpen(false) } : undefined} />
       {navOpen && <div className="backdrop" onClick={() => setNavOpen(false)} />}
 
       <div className="main">
@@ -121,6 +142,9 @@ export default function Dashboard({ me }: { me: Me }) {
           {view === 'alerts' && <Alerts records={records} onManage={setManage} />}
           {view === 'intake' && <Intake records={records} />}
           {view === 'regions' && <Regions records={records} />}
+          {view === 'quotes' && <QuotesView me={me} records={records} showToast={showToast} onChanged={bizChanged} onOpenProject={openProject} />}
+          {view === 'projects' && <ProjectsView me={me} showToast={showToast} onChanged={bizChanged} openProjectId={gotoProjectId} onOpenedProject={() => setGotoProjectId(null)} />}
+          {view === 'approvals' && <ApprovalsView me={me} showToast={showToast} onChanged={bizChanged} onOpenProject={openProject} />}
           {view === 'users' && canManageUsers(me.role) && <UsersView me={me} showToast={showToast} />}
           {view === 'customers' && (
             <Customers records={records} editable={editable} onManage={setManage} onAdd={() => setAddOpen(true)}
@@ -132,14 +156,17 @@ export default function Dashboard({ me }: { me: Me }) {
       {manage && <ManageModal rec={manage} me={me} rateOf={rateOf} onClose={() => setManage(null)} onSaved={() => { setManage(null); load() }} showToast={showToast} />}
       {addOpen && <AddModal records={records} rateOf={rateOf} onClose={() => setAddOpen(false)} onSaved={() => { setAddOpen(false); load() }} showToast={showToast} />}
       {ratesOpen && <RatesModal rates={rates} onClose={() => setRatesOpen(false)} onSaved={(r) => { setRates(r); setRatesOpen(false); load() }} showToast={showToast} />}
+      {coSettingsOpen && <CompanySettingsModal onClose={() => setCoSettingsOpen(false)} showToast={showToast} />}
+      {sigOpen && <SignatureModal me={me} onClose={() => setSigOpen(false)} showToast={showToast} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
   )
 }
 
 /* ---------------- Sidebar ---------------- */
-function Sidebar({ me, view, records, onNav, onRates }: {
-  me: Me; view: View; records: Rec[]; onNav: (v: View) => void; onRates?: () => void
+function Sidebar({ me, view, records, apprCount, onNav, onRates, onCoSettings, onSignature }: {
+  me: Me; view: View; records: Rec[]; apprCount: number; onNav: (v: View) => void
+  onRates?: () => void; onCoSettings?: () => void; onSignature?: () => void
 }) {
   const alertCount = useMemo(() => {
     const now = NOW()
@@ -162,6 +189,10 @@ function Sidebar({ me, view, records, onNav, onRates }: {
         {item('intake', 'ลูกค้าเข้าใหม่', <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="9" cy="7" r="3.4" /><path d="M2.5 20v-1.6a4 4 0 014-4h5a4 4 0 014 4V20" /><path d="M18 7.5v5M20.5 10h-5" /></svg>)}
         {item('regions', 'ภูมิภาค (BU)', <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 6l6-2 4 2 6-2v14l-6 2-4-2-6 2z" /><path d="M10 4v14M14 6v14" /></svg>)}
         {item('customers', 'รายการลูกค้า', <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 5h18M3 12h18M3 19h18" /></svg>, <span className="badge">{commas(records.length)}</span>)}
+        <div className="nav-lbl">ขาย &amp; ก่อสร้าง</div>
+        {item('quotes', 'ใบเสนอราคา', <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h5" /></svg>)}
+        {item('projects', 'งานก่อสร้าง', <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 21h18M5 21V8l7-5 7 5v13" /><path d="M9 21v-6h6v6M9 11h.01M15 11h.01" /></svg>)}
+        {item('approvals', 'รออนุมัติ', <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11l3 3 8-8" /><path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h11" /></svg>, apprCount ? <span className="alert-badge">{apprCount}</span> : null)}
         {canManageUsers(me.role) && item('users', 'จัดการผู้ใช้', <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="9" cy="7" r="3.4" /><path d="M2.5 20v-1.6a4 4 0 014-4h5a4 4 0 014 4V20" /><circle cx="17.5" cy="14.5" r="2.2" /><path d="M17.5 10.8v1.5M17.5 16.7v1.5M14.3 14.5h1.5M19.2 14.5h1.5" /></svg>)}
       </nav>
       <div className="sb-foot">
@@ -169,6 +200,18 @@ function Sidebar({ me, view, records, onNav, onRates }: {
           <button className="sbtn" onClick={onRates}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="4" /><path d="M12 1v3M12 20v3M1 12h3M20 12h3" /></svg>
             ตั้งค่าเรตราคา
+          </button>
+        )}
+        {onCoSettings && (
+          <button className="sbtn" onClick={onCoSettings}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M3 21h18M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16" /><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2" /></svg>
+            ตั้งค่าบริษัท / ใบเสนอราคา
+          </button>
+        )}
+        {onSignature && (
+          <button className="sbtn" onClick={onSignature}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M17 3a2.8 2.8 0 114 4L7.5 20.5 2 22l1.5-5.5z" /></svg>
+            ลายเซ็นของฉัน
           </button>
         )}
         <div className="sb-user">

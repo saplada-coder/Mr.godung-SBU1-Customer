@@ -88,3 +88,82 @@ export const CATS = [
   'โกดัง / คลังสินค้า','โรงงาน / การผลิต','อู่ซ่อมรถ / ยานยนต์','สนามกีฬา / ฟิตเนส',
   'ฟาร์ม / เกษตร','ลานจอดรถ / ที่จอด','ให้เช่า / พาณิชย์','อื่นๆ',
 ] as const
+
+/* ================= ใบเสนอราคา & Budget Control ================= */
+
+/** หมวดต้นทุน 6 หมวด — ใช้ทั้งประมาณการในใบเสนอ งบประมาณ และค่าใช้จ่ายจริง */
+export const COST_CATS = [
+  { k: 'material', label: 'ค่าวัสดุ', c: '#2563c9' },
+  { k: 'labor', label: 'ค่าแรง', c: '#c2610a' },
+  { k: 'subcontract', label: 'ผู้รับเหมาช่วง', c: '#8b2fb5' },
+  { k: 'equipment', label: 'เครื่องจักร/อุปกรณ์', c: '#3f8f3a' },
+  { k: 'transport', label: 'ขนส่ง', c: '#b58600' },
+  { k: 'other', label: 'อื่นๆ', c: '#5f6b76' },
+] as const
+export type CostCat = (typeof COST_CATS)[number]['k']
+export const COST_CAT_KEYS: string[] = COST_CATS.map((c) => c.k)
+export const costCatMeta = (k: string) => COST_CATS.find((c) => c.k === k) ?? COST_CATS[5]
+
+/** สถานะเอกสารใบเสนอราคา + สี */
+export const QDOCS = [
+  { k: 'ร่าง', c: '#5f6b76', b: '#e9ebee' },
+  { k: 'รออนุมัติ', c: '#b58600', b: '#fbeec0' },
+  { k: 'อนุมัติแล้ว', c: '#2563c9', b: '#d9e8fb' },
+  { k: 'ส่งลูกค้าแล้ว', c: '#4338ca', b: '#dfdefa' },
+  { k: 'ลูกค้าตกลง', c: '#3f8f3a', b: '#dcedd2' },
+  { k: 'ถูกแทนที่', c: '#7a5c4f', b: '#eee4df' },
+  { k: 'ยกเลิก', c: '#b0281c', b: '#f4dbd7' },
+] as const
+export const QDOC_STATUSES: string[] = QDOCS.map((q) => q.k)
+export const qdocMeta = (s: string) => QDOCS.find((x) => x.k === s) ?? QDOCS[0]
+
+/** สถานะงานก่อสร้าง + สี */
+export const PROJECT_STAGES = [
+  { k: 'กำลังก่อสร้าง', c: '#2563c9', b: '#d9e8fb' },
+  { k: 'ส่งมอบแล้ว', c: '#8b2fb5', b: '#eeddf7' },
+  { k: 'ปิดงาน', c: '#3f8f3a', b: '#dcedd2' },
+] as const
+export const PROJECT_STATUSES: string[] = PROJECT_STAGES.map((s) => s.k)
+export const projMeta = (s: string) => PROJECT_STAGES.find((x) => x.k === s) ?? PROJECT_STAGES[0]
+
+export const EXP_STAGES = [
+  { k: 'รออนุมัติ', c: '#b58600', b: '#fbeec0' },
+  { k: 'อนุมัติแล้ว', c: '#3f8f3a', b: '#dcedd2' },
+  { k: 'ตีกลับ', c: '#b0281c', b: '#f4dbd7' },
+] as const
+export const expMeta = (s: string) => EXP_STAGES.find((x) => x.k === s) ?? EXP_STAGES[0]
+
+export const INST_WORK = [
+  { k: 'รอดำเนินการ', c: '#5f6b76', b: '#e9ebee' },
+  { k: 'กำลังทำ', c: '#2563c9', b: '#d9e8fb' },
+  { k: 'ส่งมอบแล้ว', c: '#3f8f3a', b: '#dcedd2' },
+] as const
+export const INST_PAY = [
+  { k: 'ยังไม่วางบิล', c: '#5f6b76', b: '#e9ebee' },
+  { k: 'วางบิลแล้ว', c: '#b58600', b: '#fbeec0' },
+  { k: 'รับเงินแล้ว', c: '#3f8f3a', b: '#dcedd2' },
+] as const
+export const instWorkMeta = (s: string) => INST_WORK.find((x) => x.k === s) ?? INST_WORK[0]
+export const instPayMeta = (s: string) => INST_PAY.find((x) => x.k === s) ?? INST_PAY[0]
+
+/** แม่แบบงวดงานมาตรฐาน 9 งวด (30/10/10/10/10/10/10/5/5) — ตามฟอร์มใบเสนอราคาจริงของบริษัท */
+export const DEFAULT_INSTALLMENTS: { title: string; percent: number; detail: string; note: string }[] = [
+  { title: 'งวดที่ 1', percent: 30, detail: '- ลงนามในสัญญาออกแบบพร้อมก่อสร้าง\n- มัดจำ เริ่มงานออกแบบ และเตรียมเอกสารแบบแปลน ยื่นขอใบอนุญาตก่อสร้าง\n** ระยะเวลายื่นขออนุญาต 45 วัน ทั้งนี้สามารถเริ่มก่อสร้างได้เลย โดยไม่ต้องรอใบอนุญาต **', note: 'ระยะเวลาขอใบอนุญาต 45 วัน' },
+  { title: 'งวดที่ 2', percent: 10, detail: '- มัดจำ เริ่มงานก่อสร้าง\n- เตรียมการเคลียร์พื้นที่ ปรับพื้น ติดตั้งมิเตอร์น้ำไฟชั่วคราว\n- งานวางผัง', note: 'ระยะเวลาก่อสร้าง ตามสัญญา *นับตั้งแต่โอนมัดจำ เริ่มงานก่อสร้าง' },
+  { title: 'งวดที่ 3', percent: 10, detail: '- งานโครงสร้างเสาเข็ม และรากฐาน ตอม่อ คาน แล้วเสร็จ', note: '' },
+  { title: 'งวดที่ 4', percent: 10, detail: '- งานโครงสร้างพื้นคอนกรีตแล้วเสร็จ', note: '' },
+  { title: 'งวดที่ 5', percent: 10, detail: '- งานโครงสร้างเหล็กสำเร็จรูปแล้วเสร็จ', note: '' },
+  { title: 'งวดที่ 6', percent: 10, detail: '- งานติดตั้งเมทัลชีทหลังคา แล้วเสร็จ\n- งานติดตั้งเมทัลชีทผนัง แล้วเสร็จ', note: '' },
+  { title: 'งวดที่ 7', percent: 10, detail: '- งานติดตั้งประตู หน้าต่าง แล้วเสร็จ\n- งานติดตั้งฝ้าและผนัง แล้วเสร็จ', note: '' },
+  { title: 'งวดที่ 8', percent: 5, detail: '- งานห้องสำนักงาน แล้วเสร็จ\n- งานห้องน้ำ , ระบบสุขาภิบาล แล้วเสร็จ', note: '' },
+  { title: 'งวดที่ 9', percent: 5, detail: '- งานไฟฟ้า แล้วเสร็จ\n- งานเก็บรายละเอียดทั้งหมด ส่วนอื่นๆที่เหลือทั้งหมด ให้ถูกต้อง ครบถ้วนตามแบบ รายการก่อสร้างและสัญญาทุกประการ , ส่งมอบงาน', note: '' },
+]
+
+export const DEFAULT_WARRANTY = '1. รับประกันโครงสร้างอาคาร 2 ปี\n2. รับประกันส่วนงานตกแต่งอื่นๆ 1 ปี\n3. รับประกันเมทัลชีท ผุเป็นรู จากบลูสโคป 10 ปี\n* เงื่อนไขเป็นตามที่บริษัทกำหนด'
+export const DEFAULT_EXCLUSIONS = 'ราคาไม่รวมดินถม , มิเตอร์น้ำ มิเตอร์ไฟฟ้าชั่วคราว'
+export const DEFAULT_OP_FEE_PCT = 15
+export const DEFAULT_PERMIT_DAYS = 45
+export const DEFAULT_BUILD_DAYS = 90
+
+/** สิทธิ์อนุมัติ (ใบเสนอราคา/ค่าใช้จ่าย) + ตั้งงบ + ปิดงาน */
+export const canApprove = isAdminUp
