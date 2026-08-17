@@ -13,8 +13,8 @@ type Cust = { id: number; code: string; bu: string; name: string | null; chname:
 const Svg = ({ html }: { html: string }) => <div dangerouslySetInnerHTML={{ __html: html }} />
 
 /* ================= รายการงานก่อสร้าง + ภาพรวมบริษัท ================= */
-export default function ProjectsView({ me, records, showToast, onChanged, openProjectId, onOpenedProject }: {
-  me: Me; records: Cust[]; showToast: (m: string) => void; onChanged: () => void
+export default function ProjectsView({ me, records, limitedData, showToast, onChanged, openProjectId, onOpenedProject }: {
+  me: Me; records: Cust[]; limitedData?: boolean; showToast: (m: string) => void; onChanged: () => void
   openProjectId: number | null; onOpenedProject: () => void
 }) {
   const [projects, setProjects] = useState<ProjectRow[] | null>(null)
@@ -110,7 +110,7 @@ export default function ProjectsView({ me, records, showToast, onChanged, openPr
       )}
 
       {newOpen && (
-        <NewProjectModal records={records} showToast={showToast}
+        <NewProjectModal records={records} limitedData={limitedData} showToast={showToast}
           onClose={() => setNewOpen(false)}
           onCreated={(pid) => { setNewOpen(false); load(); onChanged(); setOpenId(pid) }} />
       )}
@@ -120,8 +120,8 @@ export default function ProjectsView({ me, records, showToast, onChanged, openPr
 }
 
 /* ---------------- เปิดงานตรงจากลูกค้า (ไม่มีใบเสนอราคา) ---------------- */
-function NewProjectModal({ records, onClose, onCreated, showToast }: {
-  records: Cust[]; onClose: () => void; onCreated: (id: number) => void; showToast: (m: string) => void
+function NewProjectModal({ records, limitedData, onClose, onCreated, showToast }: {
+  records: Cust[]; limitedData?: boolean; onClose: () => void; onCreated: (id: number) => void; showToast: (m: string) => void
 }) {
   const [q, setQ] = useState('')
   const [picked, setPicked] = useState<Cust | null>(null)
@@ -178,6 +178,7 @@ function NewProjectModal({ records, onClose, onCreated, showToast }: {
                   </div>
                 ))}
               </div>
+              {limitedData && <div className="hintline">แสดงเฉพาะลูกค้า 3 เดือนล่าสุด — งานเก่าหาไม่เจอ ให้กดปุ่ม &quot;📅 3 เดือนล่าสุด&quot; ที่แถบบนเพื่อสลับเป็นข้อมูลทั้งหมด</div>}
             </>
           ) : (
             <>

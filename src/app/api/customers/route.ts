@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { desc, sql } from 'drizzle-orm'
+import { desc, gte, inArray, isNull, or, sql } from 'drizzle-orm'
 import { getDb } from '@/db'
 import { customers, appointments, attachments, notes, activityLog } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
@@ -9,19 +9,44 @@ import { canEdit, isFinal, LEAD_STATUSES, QUOTE_STATUSES, CHANNELS, BUS, ST_APPT
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export async function GET(req: Request) {
   const me = await getSessionUser()
   if (!me) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const db = getDb()
 
-  // อิสระต่อกันทั้งหมด — ยิงพร้อมกันรอบเดียว (เดิมต่อกัน 5 รอบ ช้ามาก)
-  const [rates, rows, appts, attCounts, noteCounts] = await Promise.all([
+  // ค่าเริ่มต้นดึงเฉพาะลูกค้าที่มีความเคลื่อนไหว 3 เดือนล่าสุด (ทักเข้ามา/ถูกแก้ไข/ยังไม่ลงวันที่)
+  // — payload เล็กลงมาก โหลดเร็ว · ?range=all = ทั้งหมดเหมือนเดิม (ปุ่มสลับที่แถบบน)
+  const all = new URL(req.url).searchParams.get('range') === 'all'
+  const cutoff = new Date()
+  cutoff.setMonth(cutoff.getMonth() - 3)
+  const cutoffStr = cutoff.toISOString().slice(0, 10)
+
+  const [rates, rows] = await Promise.all([
     getRates(),
-    db.select().from(customers).orderBy(desc(customers.amountActual), desc(customers.amountEst)),
-    db.select().from(appointments).orderBy(desc(appointments.apptDate)),
-    db.select({ id: attachments.customerId, n: sql<number>`count(*)::int` }).from(attachments).groupBy(attachments.customerId),
-    db.select({ id: notes.customerId, n: sql<number>`count(*)::int` }).from(notes).groupBy(notes.customerId),
+    (all
+      ? db.select().from(customers)
+      : db.select().from(customers).where(or(isNull(customers.inquiredAt), gte(customers.inquiredAt, cutoffStr), gte(customers.updatedAt, cutoff)))
+    ).orderBy(desc(customers.amountActual), desc(customers.amountEst)),
   ])
+  const ids = rows.map((r) => r.id)
+
+  // ตารางลูก ดึงเฉพาะของลูกค้าที่โหลดมา
+  const [appts, attCounts, noteCounts] = ids.length
+    ? await Promise.all([
+        (all
+          ? db.select().from(appointments)
+          : db.select().from(appointments).where(inArray(appointments.customerId, ids))
+        ).orderBy(desc(appointments.apptDate)),
+        (all
+          ? db.select({ id: attachments.customerId, n: sql<number>`count(*)::int` }).from(attachments)
+          : db.select({ id: attachments.customerId, n: sql<number>`count(*)::int` }).from(attachments).where(inArray(attachments.customerId, ids))
+        ).groupBy(attachments.customerId),
+        (all
+          ? db.select({ id: notes.customerId, n: sql<number>`count(*)::int` }).from(notes)
+          : db.select({ id: notes.customerId, n: sql<number>`count(*)::int` }).from(notes).where(inArray(notes.customerId, ids))
+        ).groupBy(notes.customerId),
+      ])
+    : [[], [], []]
   const apptByCust = new Map<number, (typeof appts)[number]>()
   for (const a of appts) if (!apptByCust.has(a.customerId)) apptByCust.set(a.customerId, a)
   const attMap = new Map(attCounts.map((r) => [r.id, r.n]))
@@ -32,7 +57,7 @@ export async function GET() {
   )
 
   return NextResponse.json({
-    me, rates, records,
+    me, rates, records, range: all ? 'all' : '3m',
     meta: {
       updated: '17 ก.ค. 2026', ref: '2026-07-15', refLabel: '15 ก.ค. 2026', targetYear: '2024', targetTotal: 255,
       quarters: [{ q: 'Q1', target: 15 }, { q: 'Q2', target: 70 }, { q: 'Q3', target: 80 }, { q: 'Q4', target: 90 }],

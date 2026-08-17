@@ -12,8 +12,9 @@ type Me = { id: number; email: string; name: string | null; image: string | null
 type Cust = { id: number; code: string; bu: string; name: string | null; chname: string | null; phone: string | null; province: string | null; sqm: number | null; d: string | null }
 
 /* ================= รายการใบเสนอราคา ================= */
-export default function QuotesView({ me, records, showToast, onChanged, onOpenProject }: {
-  me: Me; records: Cust[]; showToast: (m: string) => void; onChanged: () => void; onOpenProject: (projectId: number) => void
+export default function QuotesView({ me, records, limitedData, showToast, onChanged, onOpenProject }: {
+  me: Me; records: Cust[]; limitedData?: boolean
+  showToast: (m: string) => void; onChanged: () => void; onOpenProject: (projectId: number) => void
 }) {
   const [quotes, setQuotes] = useState<Quote[] | null>(null)
   const [q, setQ] = useState(''); const [fStat, setFStat] = useState(''); const [fBu, setFBu] = useState('')
@@ -91,7 +92,7 @@ export default function QuotesView({ me, records, showToast, onChanged, onOpenPr
         </table>
       </div>
 
-      {pickerOpen && <CustomerPicker records={records} onClose={() => setPickerOpen(false)} onPick={create} />}
+      {pickerOpen && <CustomerPicker records={records} limitedData={limitedData} onClose={() => setPickerOpen(false)} onPick={create} />}
       {openId != null && (
         <QuoteModal id={openId} me={me} showToast={showToast}
           onClose={() => setOpenId(null)}
@@ -103,7 +104,7 @@ export default function QuotesView({ me, records, showToast, onChanged, onOpenPr
 }
 
 /* ---------------- เลือกลูกค้าเพื่อสร้างใบ ---------------- */
-function CustomerPicker({ records, onClose, onPick }: { records: Cust[]; onClose: () => void; onPick: (id: number) => void }) {
+function CustomerPicker({ records, limitedData, onClose, onPick }: { records: Cust[]; limitedData?: boolean; onClose: () => void; onPick: (id: number) => void }) {
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
   const list = useMemo(() => {
@@ -135,6 +136,7 @@ function CustomerPicker({ records, onClose, onPick }: { records: Cust[]; onClose
             ))}
             {!list.length && <div className="empty">ไม่พบลูกค้า</div>}
           </div>
+          {limitedData && <div className="hintline">แสดงเฉพาะลูกค้า 3 เดือนล่าสุด — หาไม่เจอ ให้กดปุ่ม &quot;📅 3 เดือนล่าสุด&quot; ที่แถบบนเพื่อสลับเป็นข้อมูลทั้งหมด</div>}
         </div>
       </div>
     </div>

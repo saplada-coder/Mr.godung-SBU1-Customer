@@ -26,7 +26,8 @@ type Meta = { updated: string; ref: string; refLabel: string; targetYear: string
 type Me = { id: number; email: string; name: string | null; image: string | null; role: Role; bu: string | null }
 type View = 'overview' | 'alerts' | 'intake' | 'regions' | 'customers' | 'quotes' | 'projects' | 'office' | 'approvals' | 'users'
 const TITLES: Record<View, string> = { overview: 'ภาพรวม', alerts: 'แจ้งเตือน', intake: 'ลูกค้าเข้าใหม่', regions: 'ภูมิภาค (BU)', customers: 'รายการลูกค้า', quotes: 'ใบเสนอราคา', projects: 'งานก่อสร้าง', office: 'ค่าใช้จ่ายสำนักงาน', approvals: 'รออนุมัติ', users: 'จัดการผู้ใช้' }
-const CACHE_KEY = 'sbu1-dash-cache-v1'
+// v2: cache เก็บเฉพาะชุด 3 เดือนล่าสุด (ชุดเต็มใหญ่เกินกว่าจะ cache)
+const CACHE_KEY = 'sbu1-dash-cache-v2'
 const REF = () => toMs('2026-07-15') // อ้างอิงข้อมูลล่าสุด
 const NOW = () => Date.UTC(2026, 6, 17)
 
@@ -84,12 +85,23 @@ export default function Dashboard({ me }: { me: Me }) {
     toastT.current = setTimeout(() => setToast(''), 2600)
   }, [])
 
+  // ค่าเริ่มต้นโหลดเฉพาะลูกค้าที่เคลื่อนไหว 3 เดือนล่าสุด (เร็ว) — สลับ "ทั้งหมด" ได้ที่แถบบน
+  const [range, setRange] = useState<'3m' | 'all'>('3m')
+  const [rangeBusy, setRangeBusy] = useState(false)
+  const rangeRef = useRef(range)
+  rangeRef.current = range
+
   const load = useCallback(async () => {
-    const r = await fetch('/api/customers', { cache: 'no-store' })
+    setRangeBusy(true)
+    const r = await fetch(`/api/customers?range=${rangeRef.current}`, { cache: 'no-store' })
+    setRangeBusy(false)
     if (!r.ok) { showToast('โหลดข้อมูลไม่สำเร็จ'); setLoading(false); return }
     const j = await r.json()
+    if (j.range !== rangeRef.current) return // ผู้ใช้สลับช่วงระหว่างรอ — ทิ้งผลรอบเก่า
     setRecords(j.records); setRates(j.rates); setMeta(j.meta); setLoading(false)
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ records: j.records, rates: j.rates, meta: j.meta })) } catch { /* เต็ม/ปิดไว้ ไม่เป็นไร */ }
+    if (j.range === '3m') {
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify({ records: j.records, rates: j.rates, meta: j.meta })) } catch { /* เต็ม/ปิดไว้ ไม่เป็นไร */ }
+    }
   }, [showToast])
   useEffect(() => {
     // โชว์ข้อมูลรอบก่อนทันที (ถ้ามี) แล้วค่อยดึงของสดมาแทน — ตัดหน้าจอ "กำลังโหลด" ที่ค้างนาน
@@ -97,8 +109,8 @@ export default function Dashboard({ me }: { me: Me }) {
       const c = localStorage.getItem(CACHE_KEY)
       if (c) { const j = JSON.parse(c); setRecords(j.records); setRates(j.rates); setMeta(j.meta); setLoading(false) }
     } catch { /* cache เสีย — โหลดปกติ */ }
-    load()
-  }, [load])
+  }, [])
+  useEffect(() => { load() }, [load, range])
 
   // จำนวนรออนุมัติ (badge ที่ sidebar) — รีเฟรชเมื่อฝั่งใบเสนอ/งานมีการเปลี่ยนแปลง
   const loadApprCount = useCallback(async () => {
@@ -134,7 +146,12 @@ export default function Dashboard({ me }: { me: Me }) {
           </button>
           <span className="tb-title">{TITLES[view]}</span>
           <div className="tb-right">
-            <span className="tb-pill">ไปป์ไลน์รวม <b>฿{fmtB(pipeline)}</b></span>
+            <button className="tb-pill" style={{ cursor: 'pointer', font: 'inherit' }}
+              title="สลับช่วงข้อมูลลูกค้าที่โหลด — 3 เดือนล่าสุดโหลดเร็วกว่ามาก"
+              onClick={() => setRange((r) => (r === '3m' ? 'all' : '3m'))}>
+              {rangeBusy ? '⏳ กำลังโหลด…' : range === '3m' ? '📅 3 เดือนล่าสุด' : '📅 ข้อมูลทั้งหมด'}
+            </button>
+            <span className="tb-pill">ไปป์ไลน์{range === '3m' ? ' (3 ด.)' : 'รวม'} <b>฿{fmtB(pipeline)}</b></span>
             <span className="tb-pill">{ROLE_LABEL[me.role]}</span>
           </div>
         </div>
@@ -143,8 +160,8 @@ export default function Dashboard({ me }: { me: Me }) {
           {view === 'alerts' && <Alerts records={records} onManage={setManage} />}
           {view === 'intake' && <Intake records={records} />}
           {view === 'regions' && <Regions records={records} />}
-          {view === 'quotes' && <QuotesView me={me} records={records} showToast={showToast} onChanged={bizChanged} onOpenProject={openProject} />}
-          {view === 'projects' && <ProjectsView me={me} records={records} showToast={showToast} onChanged={bizChanged} openProjectId={gotoProjectId} onOpenedProject={() => setGotoProjectId(null)} />}
+          {view === 'quotes' && <QuotesView me={me} records={records} limitedData={range === '3m'} showToast={showToast} onChanged={bizChanged} onOpenProject={openProject} />}
+          {view === 'projects' && <ProjectsView me={me} records={records} limitedData={range === '3m'} showToast={showToast} onChanged={bizChanged} openProjectId={gotoProjectId} onOpenedProject={() => setGotoProjectId(null)} />}
           {view === 'office' && <OfficeExpensesView me={me} showToast={showToast} onChanged={bizChanged} />}
           {view === 'approvals' && <ApprovalsView me={me} showToast={showToast} onChanged={bizChanged} onOpenProject={openProject} />}
           {view === 'users' && canManageUsers(me.role) && <UsersView me={me} showToast={showToast} />}
