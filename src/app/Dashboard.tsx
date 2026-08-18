@@ -12,6 +12,7 @@ import ProjectsView from './ProjectsView'
 import ApprovalsView from './ApprovalsView'
 import OfficeExpensesView from './OfficeExpensesView'
 import FinanceDocsView from './FinanceDocsView'
+import { uiConfirm } from './biz-shared'
 
 type Appt = { type: string; date: string; time: string; note: string } | null
 export type Rec = {
@@ -649,7 +650,7 @@ function Customers({ records, editable, onManage, onAdd, onCreateQuote, patch }:
                   <td className={'amt' + (v ? '' : ' zero')}>{v ? '฿' + commas(v) : '—'}{v ? <span className={'vtag' + (r.isFinal ? ' real' : '')}>{r.isFinal ? 'มูลค่าจริง' : 'ประมาณ'}</span> : null}</td>
                   <td className="act" style={{ whiteSpace: 'nowrap' }}>
                     {editable && <button className="row-btn" onClick={() => onManage(r)}>จัดการ</button>}
-                    {editable && <button className="row-btn" style={{ marginLeft: 5, color: 'var(--accent)' }} title="สร้างใบเสนอราคาให้ลูกค้ารายนี้" onClick={() => { if (window.confirm(`สร้างใบเสนอราคาให้ "${r.name || r.chname || r.code}"?`)) onCreateQuote(r) }}>+ใบเสนอ</button>}
+                    {editable && <button className="row-btn" style={{ marginLeft: 5, color: 'var(--accent)' }} title="สร้างใบเสนอราคาให้ลูกค้ารายนี้" onClick={async () => { if (await uiConfirm(`สร้างใบเสนอราคาให้ "${r.name || r.chname || r.code}"?`)) onCreateQuote(r) }}>+ใบเสนอ</button>}
                   </td>
                 </tr>
               )
@@ -1026,7 +1027,7 @@ function ManageModal({ rec, me, rateOf, onClose, onSaved, showToast, onCreateQuo
           </div>
         </div>
         <div className="modal-f">
-          {onCreateQuote && <button className="btn" style={{ marginRight: 'auto', color: 'var(--accent)' }} onClick={() => { if (window.confirm('สร้างใบเสนอราคาให้ลูกค้ารายนี้?')) onCreateQuote() }}>🧾 สร้างใบเสนอราคา</button>}
+          {onCreateQuote && <button className="btn" style={{ marginRight: 'auto', color: 'var(--accent)' }} onClick={async () => { if (await uiConfirm('สร้างใบเสนอราคาให้ลูกค้ารายนี้?')) onCreateQuote() }}>🧾 สร้างใบเสนอราคา</button>}
           <button className="btn" onClick={onClose}>ปิด</button><button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? 'กำลังบันทึก…' : 'บันทึก'}</button>
         </div>
       </div>

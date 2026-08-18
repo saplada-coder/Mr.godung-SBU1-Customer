@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { costCatMeta, isAdminUp, type Role } from '@/lib/constants'
 import { commas, thDate } from '@/lib/format'
+import { uiConfirm, uiPrompt } from './biz-shared'
 
 type Me = { id: number; email: string; name: string | null; image: string | null; role: Role; bu: string | null }
 type PendingExpense = { id: number; projectId: number | null; projectName: string; category: string; description: string; vendor: string | null; amount: number; expenseDate: string; receiptUrl: string | null; createdByName: string | null; createdAt: string; overBudget: boolean; overBy: number }
@@ -26,7 +27,7 @@ export default function ApprovalsView({ me, showToast, onChanged, onOpenProject 
 
   const toggle = (id: number) => setSel((o) => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const bulkApprove = async () => {
-    if (!sel.size || !window.confirm(`อนุมัติค่าใช้จ่าย ${sel.size} รายการที่เลือก?`)) return
+    if (!sel.size || !await uiConfirm(`อนุมัติค่าใช้จ่าย ${sel.size} รายการที่เลือก?`)) return
     setBulkBusy(true)
     let ok = 0, fail = 0
     for (const id of sel) {
@@ -41,7 +42,7 @@ export default function ApprovalsView({ me, showToast, onChanged, onOpenProject 
   const expAction = async (id: number, action: 'approve' | 'reject') => {
     let body: Record<string, unknown> = { action }
     if (action === 'reject') {
-      const reason = window.prompt('เหตุผลที่ตีกลับ:')
+      const reason = await uiPrompt('เหตุผลที่ตีกลับ:')
       if (!reason?.trim()) return
       body = { action, reason }
     }

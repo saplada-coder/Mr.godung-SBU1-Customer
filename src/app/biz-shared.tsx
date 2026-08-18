@@ -71,6 +71,42 @@ export async function fileToDataUrl(file: File, maxW = 1400, quality = 0.82): Pr
   return canvas.toDataURL('image/jpeg', quality)
 }
 
+/* ---------- กล่องยืนยัน/กรอกข้อความของแอปเอง ----------
+ * window.prompt()/confirm() ถูกปิดในแอปที่ติดตั้งเป็น PWA (โหมด standalone)
+ * จึงสร้างกล่องเองด้วย DOM ตรงๆ — ใช้ CSS class เดิมของแอป ทำงานได้ทุกสภาพแวดล้อม */
+const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
+
+function domDialog(message: string, withInput: boolean): Promise<string | boolean | null> {
+  return new Promise((resolve) => {
+    const bd = document.createElement('div')
+    bd.className = 'modal-bd'
+    bd.style.zIndex = '150'
+    bd.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true" style="max-width:400px">
+        <div class="form" style="grid-template-columns:1fr">
+          <div class="field full" style="font-size:13.5px;line-height:1.65;white-space:pre-wrap">${escapeHtml(message)}</div>
+          ${withInput ? '<div class="field full"><input /></div>' : ''}
+        </div>
+        <div class="modal-f">
+          <button type="button" class="btn" data-a="cancel">ยกเลิก</button>
+          <button type="button" class="btn btn-primary" data-a="ok">ตกลง</button>
+        </div>
+      </div>`
+    const input = bd.querySelector('input')
+    const done = (v: string | boolean | null) => { bd.remove(); resolve(v) }
+    bd.querySelector('[data-a="cancel"]')!.addEventListener('click', () => done(withInput ? null : false))
+    bd.querySelector('[data-a="ok"]')!.addEventListener('click', () => done(withInput ? input?.value ?? '' : true))
+    bd.addEventListener('click', (e) => { if (e.target === bd) done(withInput ? null : false) })
+    input?.addEventListener('keydown', (e) => { if (e.key === 'Enter') done(input.value) })
+    document.body.appendChild(bd)
+    input?.focus()
+  })
+}
+/** ใช้แทน window.confirm ทุกจุด */
+export const uiConfirm = (message: string) => domDialog(message, false) as Promise<boolean>
+/** ใช้แทน window.prompt ทุกจุด — คืน null เมื่อกดยกเลิก */
+export const uiPrompt = (message: string) => domDialog(message, true) as Promise<string | null>
+
 /** ตัวเลือกไฟล์รูป + บีบอัด แล้วส่ง data URL กลับ */
 export function pickImage(onPicked: (dataUrl: string) => void, onError?: (m: string) => void) {
   const inp = document.createElement('input')

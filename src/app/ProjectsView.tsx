@@ -6,7 +6,7 @@ import {
   INST_WORK, INST_PAY, PROJECT_STATUSES, BILL_KINDS, billKindMeta, PAY_METHODS, canEdit, isAdminUp, type Role,
 } from '@/lib/constants'
 import { commas, fmtB, thDate } from '@/lib/format'
-import { bizGroupedBars, bizProjectBars, bizSCurve, cumulative, pickImage, type ProjectRow, type ExpenseRow, type InstRow, type HistItem } from './biz-shared'
+import { bizGroupedBars, bizProjectBars, bizSCurve, cumulative, pickImage, uiConfirm, uiPrompt, type ProjectRow, type ExpenseRow, type InstRow, type HistItem } from './biz-shared'
 
 type Me = { id: number; email: string; name: string | null; image: string | null; role: Role; bu: string | null }
 type Cust = { id: number; code: string; bu: string; name: string | null; chname: string | null; province: string | null; status: string; shownVal: number | null; d: string | null; isFinal: boolean }
@@ -344,7 +344,7 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
     const j = await r.json()
     if (r.ok) { showToast('ปิดงานเรียบร้อย 🎉'); await load(); onChanged(); return }
     if (j.canForce) {
-      if (window.confirm(j.error + '\n\nยืนยันปิดงานทั้งที่ยังค้าง?')) {
+      if (await uiConfirm(j.error + '\n\nยืนยันปิดงานทั้งที่ยังค้าง?')) {
         const r2 = await fetch(`/api/projects/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'close', force: true }) })
         if (r2.ok) { showToast('ปิดงานเรียบร้อย'); await load(); onChanged() } else showToast((await r2.json()).error || 'ปิดงานไม่สำเร็จ')
       }
@@ -421,7 +421,7 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
             )}
             <div className="field" style={{ justifyContent: 'flex-end' }}>
               {p.status !== 'ปิดงาน' && admin && <button className="btn btn-primary" disabled={busy} onClick={close}>🏁 ปิดงาน (สรุปกำไร + ล็อก)</button>}
-              {p.status === 'ปิดงาน' && me.role === 'owner' && <button className="btn" disabled={busy} onClick={() => { if (window.confirm('ปลดล็อกงานที่ปิดแล้ว?')) patch({ action: 'reopen' }, 'ปลดล็อกแล้ว') }}>ปลดล็อกงาน</button>}
+              {p.status === 'ปิดงาน' && me.role === 'owner' && <button className="btn" disabled={busy} onClick={async () => { if (await uiConfirm('ปลดล็อกงานที่ปิดแล้ว?')) patch({ action: 'reopen' }, 'ปลดล็อกแล้ว') }}>ปลดล็อกงาน</button>}
             </div>
             {p.status === 'ปิดงาน' && (
               <div className="field full">
@@ -535,7 +535,7 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
                     {e.status === 'รออนุมัติ' && admin && d.project.status !== 'ปิดงาน' && (
                       <>
                         <button className="row-btn" style={{ color: '#3f8f3a' }} onClick={async () => { const r = await fetch(`/api/expenses/${e.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'approve' }) }); if (r.ok) { showToast('อนุมัติแล้ว'); load(); onChanged() } }}>✓ อนุมัติ</button>
-                        <button className="row-btn" style={{ color: '#b0281c' }} onClick={async () => { const reason = window.prompt('เหตุผลที่ตีกลับ:'); if (reason?.trim()) { const r = await fetch(`/api/expenses/${e.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'reject', reason }) }); if (r.ok) { showToast('ตีกลับแล้ว'); load(); onChanged() } } }}>ตีกลับ</button>
+                        <button className="row-btn" style={{ color: '#b0281c' }} onClick={async () => { const reason = await uiPrompt('เหตุผลที่ตีกลับ:'); if (reason?.trim()) { const r = await fetch(`/api/expenses/${e.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'reject', reason }) }); if (r.ok) { showToast('ตีกลับแล้ว'); load(); onChanged() } } }}>ตีกลับ</button>
                       </>
                     )}
                     {canRowEdit && <button className="row-btn" onClick={() => setExpOpen(e)}>แก้ไข</button>}
@@ -588,7 +588,7 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
                     {!cancelled && admin && d.project.status !== 'ปิดงาน' && (
                       <button className="row-btn" style={{ color: '#b0281c' }}
                         onClick={async () => {
-                          const reason = window.prompt(`ยกเลิก ${doc.code}?\nระบุเหตุผล:`)
+                          const reason = await uiPrompt(`ยกเลิก ${doc.code}?\nระบุเหตุผล:`)
                           if (!reason?.trim()) return
                           const r = await fetch(`/api/billing/${doc.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'cancel', reason }) })
                           if (r.ok) { showToast('ยกเลิกเอกสารแล้ว'); load(); onChanged() } else showToast((await r.json()).error || 'ยกเลิกไม่สำเร็จ')
@@ -742,7 +742,7 @@ function ExpenseModal({ projectId, exp, admin, budgetInfo, onClose, onSaved, sho
     } else showToast((await r.json()).error || 'บันทึกไม่สำเร็จ')
   }
   const del = async () => {
-    if (!exp || !window.confirm('ลบรายการค่าใช้จ่ายนี้?')) return
+    if (!exp || !await uiConfirm('ลบรายการค่าใช้จ่ายนี้?')) return
     const r = await fetch(`/api/expenses/${exp.id}`, { method: 'DELETE' })
     if (r.ok) { showToast('ลบแล้ว'); onSaved() } else showToast((await r.json()).error || 'ลบไม่สำเร็จ')
   }
@@ -819,7 +819,7 @@ function InstallmentModal({ projectId, contract, inst, onClose, onSaved, showToa
     if (r.ok) { showToast(inst ? 'แก้ไขงวดแล้ว' : 'เพิ่มงวดแล้ว'); onSaved() } else showToast((await r.json()).error || 'บันทึกไม่สำเร็จ')
   }
   const del = async () => {
-    if (!inst || !window.confirm(`ลบ "${inst.title}" ?`)) return
+    if (!inst || !await uiConfirm(`ลบ "${inst.title}" ?`)) return
     const r = await fetch(`/api/installments/${inst.id}`, { method: 'DELETE' })
     if (r.ok) { showToast('ลบงวดแล้ว'); onSaved() } else showToast((await r.json()).error || 'ลบไม่สำเร็จ')
   }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BILL_KINDS, billKindMeta, COST_CATS, OFFICE_CATS, canEdit, isAdminUp, type Role } from '@/lib/constants'
 import { commas, thDate } from '@/lib/format'
-import { type InstRow } from './biz-shared'
+import { uiPrompt, type InstRow } from './biz-shared'
 import { BillingModal } from './ProjectsView'
 import { CustomerPicker } from './QuotesView'
 
@@ -82,7 +82,7 @@ export default function FinanceDocsView({ me, records, showToast, onChanged, onC
 
   const printUrl = (d: DocRow) => (d.type === 'po' ? `/po/${d.id}/print` : `/billing/${d.id}/print`)
   const cancelDoc = async (d: DocRow) => {
-    const reason = window.prompt(`ยกเลิก ${d.code}?\nระบุเหตุผล:`)
+    const reason = await uiPrompt(`ยกเลิก ${d.code}?\nระบุเหตุผล:`)
     if (!reason?.trim()) return
     const url = d.type === 'po' ? `/api/po/${d.id}` : `/api/billing/${d.id}`
     const r = await fetch(url, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'cancel', reason }) })

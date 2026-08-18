@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { OFFICE_CATS, costCatMeta, expMeta, canEdit, isAdminUp, type Role } from '@/lib/constants'
 import { commas, fmtB, thDate, TH_MONTHS } from '@/lib/format'
-import { pickImage, type ExpenseRow } from './biz-shared'
+import { pickImage, uiConfirm, uiPrompt, type ExpenseRow } from './biz-shared'
 
 type Me = { id: number; email: string; name: string | null; image: string | null; role: Role; bu: string | null }
 
@@ -108,7 +108,7 @@ export default function OfficeExpensesView({ me, showToast, onChanged }: {
                 {e.status === 'รออนุมัติ' && admin && (
                   <>
                     <button className="row-btn" style={{ color: '#3f8f3a' }} onClick={async () => { const r = await fetch(`/api/expenses/${e.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'approve' }) }); if (r.ok) { showToast('อนุมัติแล้ว'); load(); onChanged() } }}>✓ อนุมัติ</button>
-                    <button className="row-btn" style={{ color: '#b0281c' }} onClick={async () => { const reason = window.prompt('เหตุผลที่ตีกลับ:'); if (reason?.trim()) { const r = await fetch(`/api/expenses/${e.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'reject', reason }) }); if (r.ok) { showToast('ตีกลับแล้ว'); load(); onChanged() } } }}>ตีกลับ</button>
+                    <button className="row-btn" style={{ color: '#b0281c' }} onClick={async () => { const reason = await uiPrompt('เหตุผลที่ตีกลับ:'); if (reason?.trim()) { const r = await fetch(`/api/expenses/${e.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'reject', reason }) }); if (r.ok) { showToast('ตีกลับแล้ว'); load(); onChanged() } } }}>ตีกลับ</button>
                   </>
                 )}
                 {canRowEdit && <button className="row-btn" onClick={() => setFormOpen(e)}>แก้ไข</button>}
@@ -163,7 +163,7 @@ function OfficeExpenseModal({ exp, admin, onClose, onSaved, showToast }: {
     } else showToast((await r.json()).error || 'บันทึกไม่สำเร็จ')
   }
   const del = async () => {
-    if (!exp || !window.confirm('ลบรายการนี้?')) return
+    if (!exp || !await uiConfirm('ลบรายการนี้?')) return
     const r = await fetch(`/api/expenses/${exp.id}`, { method: 'DELETE' })
     if (r.ok) { showToast('ลบแล้ว'); onSaved() } else showToast((await r.json()).error || 'ลบไม่สำเร็จ')
   }

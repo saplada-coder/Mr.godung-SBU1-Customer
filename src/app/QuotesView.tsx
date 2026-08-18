@@ -6,7 +6,7 @@ import {
   canEdit, isAdminUp, type Role,
 } from '@/lib/constants'
 import { commas, thDate, fmtPhone } from '@/lib/format'
-import { calcTotals, pickImage, type Quote, type HistItem } from './biz-shared'
+import { calcTotals, pickImage, uiConfirm, type Quote, type HistItem } from './biz-shared'
 
 type Me = { id: number; email: string; name: string | null; image: string | null; role: Role; bu: string | null }
 type Cust = { id: number; code: string; bu: string; name: string | null; chname: string | null; phone: string | null; province: string | null; sqm: number | null; d: string | null }
@@ -239,7 +239,7 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToas
   }
 
   const action = async (a: string, extra: Record<string, unknown> = {}, confirmMsg?: string) => {
-    if (confirmMsg && !window.confirm(confirmMsg)) return
+    if (confirmMsg && !await uiConfirm(confirmMsg)) return
     setBusy(true)
     const r = await fetch(`/api/quotes/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: a, ...extra }) })
     setBusy(false)
@@ -249,12 +249,12 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToas
   }
 
   const del = async () => {
-    if (!window.confirm('ลบใบร่างนี้ถาวร?')) return
+    if (!await uiConfirm('ลบใบร่างนี้ถาวร?')) return
     const r = await fetch(`/api/quotes/${id}`, { method: 'DELETE' })
     if (r.ok) { showToast('ลบแล้ว'); onChanged(); onClose() } else showToast((await r.json()).error || 'ลบไม่สำเร็จ')
   }
   const revise = async () => {
-    if (!window.confirm('สร้างฉบับแก้ไข (Revision) ใหม่? ใบปัจจุบันจะถูกมาร์กว่า "ถูกแทนที่"')) return
+    if (!await uiConfirm('สร้างฉบับแก้ไข (Revision) ใหม่? ใบปัจจุบันจะถูกมาร์กว่า "ถูกแทนที่"')) return
     setBusy(true)
     const r = await fetch(`/api/quotes/${id}/revise`, { method: 'POST' })
     setBusy(false)
@@ -262,7 +262,7 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToas
     if (r.ok) { showToast('สร้าง Revision ใหม่แล้ว'); onChanged(); onClose() } else showToast(j.error || 'ทำรายการไม่สำเร็จ')
   }
   const openProject = async () => {
-    if (!window.confirm('เปิดงานก่อสร้างจากใบนี้?\n• มูลค่าสัญญา = ยอดรวมทั้งสิ้น\n• งบประมาณ = ประมาณการต้นทุน 6 หมวด\n• งวดเงิน = งวดในใบเสนอราคา\n• สถานะลูกค้า → ปิดงาน (ได้งาน)')) return
+    if (!await uiConfirm('เปิดงานก่อสร้างจากใบนี้?\n• มูลค่าสัญญา = ยอดรวมทั้งสิ้น\n• งบประมาณ = ประมาณการต้นทุน 6 หมวด\n• งวดเงิน = งวดในใบเสนอราคา\n• สถานะลูกค้า → ปิดงาน (ได้งาน)')) return
     setBusy(true)
     const r = await fetch(`/api/quotes/${id}/open-project`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({}) })
     setBusy(false)
