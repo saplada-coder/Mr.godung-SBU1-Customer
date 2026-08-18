@@ -161,7 +161,7 @@ export default function Dashboard({ me }: { me: Me }) {
           {view === 'intake' && <Intake records={records} />}
           {view === 'regions' && <Regions records={records} />}
           {view === 'quotes' && <QuotesView me={me} records={records} limitedData={range === '3m'} showToast={showToast} onChanged={bizChanged} onOpenProject={openProject} />}
-          {view === 'projects' && <ProjectsView me={me} records={records} limitedData={range === '3m'} showToast={showToast} onChanged={bizChanged} openProjectId={gotoProjectId} onOpenedProject={() => setGotoProjectId(null)} />}
+          {view === 'projects' && <ProjectsView me={me} showToast={showToast} onChanged={bizChanged} openProjectId={gotoProjectId} onOpenedProject={() => setGotoProjectId(null)} />}
           {view === 'office' && <OfficeExpensesView me={me} showToast={showToast} onChanged={bizChanged} />}
           {view === 'approvals' && <ApprovalsView me={me} showToast={showToast} onChanged={bizChanged} onOpenProject={openProject} />}
           {view === 'users' && canManageUsers(me.role) && <UsersView me={me} showToast={showToast} />}

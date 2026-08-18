@@ -9,17 +9,15 @@ import { commas, fmtB, thDate } from '@/lib/format'
 import { bizGroupedBars, bizSCurve, cumulative, pickImage, type ProjectRow, type ExpenseRow, type InstRow, type HistItem } from './biz-shared'
 
 type Me = { id: number; email: string; name: string | null; image: string | null; role: Role; bu: string | null }
-type Cust = { id: number; code: string; bu: string; name: string | null; chname: string | null; province: string | null; status: string; shownVal: number | null; d: string | null; isFinal: boolean }
 const Svg = ({ html }: { html: string }) => <div dangerouslySetInnerHTML={{ __html: html }} />
 
 /* ================= รายการงานก่อสร้าง + ภาพรวมบริษัท ================= */
-export default function ProjectsView({ me, records, limitedData, showToast, onChanged, openProjectId, onOpenedProject }: {
-  me: Me; records: Cust[]; limitedData?: boolean; showToast: (m: string) => void; onChanged: () => void
+export default function ProjectsView({ me, showToast, onChanged, openProjectId, onOpenedProject }: {
+  me: Me; showToast: (m: string) => void; onChanged: () => void
   openProjectId: number | null; onOpenedProject: () => void
 }) {
   const [projects, setProjects] = useState<ProjectRow[] | null>(null)
   const [openId, setOpenId] = useState<number | null>(null)
-  const [newOpen, setNewOpen] = useState(false)
   const [fStat, setFStat] = useState(''); const [fBu, setFBu] = useState('')
 
   const load = useCallback(async () => {
@@ -47,7 +45,6 @@ export default function ProjectsView({ me, records, limitedData, showToast, onCh
         <span className="head-ctrl">
           <select value={fStat} onChange={(e) => setFStat(e.target.value)}><option value="">ทุกสถานะ</option>{PROJECT_STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
           <select value={fBu} onChange={(e) => setFBu(e.target.value)}><option value="">ทุก BU</option>{BUS.map((b) => <option key={b} value={b}>{BU_NAMES[b]}</option>)}</select>
-          {isAdminUp(me.role) && <button className="btn btn-primary" onClick={() => setNewOpen(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}><path d="M12 5v14M5 12h14" /></svg>เปิดงานใหม่</button>}
         </span>
       </div>
 
@@ -109,93 +106,8 @@ export default function ProjectsView({ me, records, limitedData, showToast, onCh
         </div>
       )}
 
-      {newOpen && (
-        <NewProjectModal records={records} limitedData={limitedData} showToast={showToast}
-          onClose={() => setNewOpen(false)}
-          onCreated={(pid) => { setNewOpen(false); load(); onChanged(); setOpenId(pid) }} />
-      )}
       {openId != null && <ProjectModal id={openId} me={me} showToast={showToast} onClose={() => setOpenId(null)} onChanged={() => { load(); onChanged() }} />}
     </>
-  )
-}
-
-/* ---------------- เปิดงานตรงจากลูกค้า (ไม่มีใบเสนอราคา) ---------------- */
-function NewProjectModal({ records, limitedData, onClose, onCreated, showToast }: {
-  records: Cust[]; limitedData?: boolean; onClose: () => void; onCreated: (id: number) => void; showToast: (m: string) => void
-}) {
-  const [q, setQ] = useState('')
-  const [picked, setPicked] = useState<Cust | null>(null)
-  const [name, setName] = useState('')
-  const [contract, setContract] = useState('')
-  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10))
-  const [busy, setBusy] = useState(false)
-
-  const list = useMemo(() => {
-    const ql = q.trim().toLowerCase()
-    return records
-      .filter((r) => !ql || `${r.name || ''} ${r.chname || ''} ${r.code}`.toLowerCase().includes(ql))
-      // ลูกค้าที่ปิดการขายแล้วขึ้นก่อน (กลุ่มเป้าหมายหลักของการเปิดงานตรง)
-      .sort((a, b) => (Number(b.isFinal) - Number(a.isFinal)) || ((b.d || '') < (a.d || '') ? -1 : 1))
-      .slice(0, 50)
-  }, [records, q])
-
-  const pick = (r: Cust) => {
-    setPicked(r)
-    setName(r.name || r.chname || r.code)
-    setContract(r.shownVal != null ? String(r.shownVal) : '')
-  }
-  const save = async () => {
-    if (!picked) return
-    if (!(+contract > 0)) { showToast('ระบุมูลค่าสัญญา'); return }
-    setBusy(true)
-    const r = await fetch('/api/projects', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ customerId: picked.id, name, contractAmount: +contract, startDate }) })
-    setBusy(false)
-    const j = await r.json()
-    if (r.ok) { showToast('เปิดงาน ' + j.code + ' แล้ว — ตั้งงบในแท็บงบประมาณ และกดใช้แม่แบบงวดได้เลย'); onCreated(j.id) }
-    else showToast(j.error || 'เปิดงานไม่สำเร็จ')
-  }
-
-  return (
-    <div className="modal-bd" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="modal" role="dialog" aria-modal style={{ maxWidth: 540 }}>
-        <div className="modal-h"><div><h3>เปิดงานใหม่ (ไม่มีใบเสนอราคา)</h3><div className="sub">สำหรับงานที่ปิดการขายไปแล้ว — งบและงวดเงินเริ่มว่าง ไปตั้งต่อในหน้างานได้</div></div><button className="modal-x" onClick={onClose}>×</button></div>
-        <div className="form" style={{ gridTemplateColumns: '1fr' }}>
-          {!picked ? (
-            <>
-              <div className="search" style={{ minWidth: 0 }}>
-                <svg viewBox="0 0 24 24" fill="none" strokeWidth={2}><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
-                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหาลูกค้า…" autoFocus />
-              </div>
-              <div className="alist" style={{ maxHeight: 360, overflowY: 'auto' }}>
-                {list.map((r) => (
-                  <div className="arow" key={r.id} style={{ cursor: 'pointer' }} onClick={() => pick(r)}>
-                    <div className="ab" style={{ background: r.isFinal ? '#3f8f3a' : 'var(--text-faint)' }} />
-                    <div className="aw">
-                      <div className="an">{r.name || r.chname || r.code}</div>
-                      <div className="as">{r.code} · {r.status}{r.shownVal ? ` · ฿${commas(r.shownVal)}` : ''}</div>
-                    </div>
-                    <span className="row-btn">เลือก</span>
-                  </div>
-                ))}
-              </div>
-              {limitedData && <div className="hintline">แสดงเฉพาะลูกค้า 3 เดือนล่าสุด — งานเก่าหาไม่เจอ ให้กดปุ่ม &quot;📅 3 เดือนล่าสุด&quot; ที่แถบบนเพื่อสลับเป็นข้อมูลทั้งหมด</div>}
-            </>
-          ) : (
-            <>
-              <div className="field full"><label>ลูกค้า</label><input readOnly value={`${picked.name || picked.chname || picked.code} (${picked.code})`} /></div>
-              <div className="field full"><label>ชื่องาน *</label><input value={name} onChange={(e) => setName(e.target.value)} /></div>
-              <div className="field full"><label>มูลค่าสัญญา (บาท) *</label><input type="number" value={contract} onChange={(e) => setContract(e.target.value)} /><div className="hintline">ดึงจากมูลค่าในระบบ CRM — แก้ให้ตรงสัญญาจริงได้</div></div>
-              <div className="field full"><label>วันเริ่มงาน</label><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></div>
-            </>
-          )}
-        </div>
-        <div className="modal-f">
-          {picked && <button className="btn" style={{ marginRight: 'auto' }} onClick={() => setPicked(null)}>← เปลี่ยนลูกค้า</button>}
-          <button className="btn" onClick={onClose}>ยกเลิก</button>
-          {picked && <button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? 'กำลังเปิดงาน…' : '🏗 เปิดงาน'}</button>}
-        </div>
-      </div>
-    </div>
   )
 }
 

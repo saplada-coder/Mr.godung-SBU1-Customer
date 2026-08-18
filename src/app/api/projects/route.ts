@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server'
-import { desc, eq, inArray } from 'drizzle-orm'
+import { desc, inArray } from 'drizzle-orm'
 import { getDb } from '@/db'
-import { projects, projectBudgets, projectInstallments, expenses, customers, activityLog } from '@/db/schema'
+import { projects, projectBudgets, projectInstallments, expenses, customers } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
-import { n0, num, genDocCode, today } from '@/lib/biz'
-import { canApprove, ST_WON } from '@/lib/constants'
+import { n0 } from '@/lib/biz'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,46 +43,4 @@ export async function GET() {
     }
   })
   return NextResponse.json({ projects: list })
-}
-
-/**
- * เปิดงานก่อสร้างตรงจากลูกค้า (ไม่มีใบเสนอราคา) — สำหรับงานเก่าที่ปิดการขายก่อนมีระบบใบเสนอ
- * งบ/งวดเงินเริ่มว่าง — ตั้งงบในแท็บงบประมาณ และกด "ใช้แม่แบบ 9 งวด" ในแท็บงวดงานได้
- */
-export async function POST(req: Request) {
-  const me = await getSessionUser()
-  if (!me) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  if (!canApprove(me.role)) return NextResponse.json({ error: 'เฉพาะเจ้าของ/ผู้ดูแลระบบที่เปิดงานได้' }, { status: 403 })
-
-  const b = await req.json()
-  const customerId = Number(b.customerId)
-  if (!Number.isFinite(customerId)) return NextResponse.json({ error: 'ต้องเลือกลูกค้า' }, { status: 400 })
-  const db = getDb()
-  const [cust] = await db.select().from(customers).where(eq(customers.id, customerId)).limit(1)
-  if (!cust) return NextResponse.json({ error: 'ไม่พบลูกค้า' }, { status: 404 })
-
-  const contract = num(b.contractAmount) ?? (cust.amountActual != null ? Number(cust.amountActual) : null) ?? (cust.amountEst != null ? Number(cust.amountEst) : null)
-  if (contract == null || contract <= 0) return NextResponse.json({ error: 'ระบุมูลค่าสัญญา (ลูกค้ารายนี้ไม่มีมูลค่าให้ดึงอัตโนมัติ)' }, { status: 400 })
-
-  const startDate = /^\d{4}-\d{2}-\d{2}$/.test(String(b.startDate)) ? String(b.startDate) : today()
-  const code = await genDocCode(db, 'PJ', cust.bu, startDate)
-  const name = String(b.name ?? '').trim().slice(0, 200) || `${cust.name || cust.chname || cust.code}${cust.cat ? ' · ' + cust.cat : ''}`
-
-  const [pj] = await db.insert(projects).values({
-    customerId, code, name, bu: cust.bu, contractAmount: String(contract),
-    startDate, ownerId: cust.ownerId ?? me.id, createdBy: me.id,
-  }).returning()
-
-  // ฝั่ง CRM: ถ้ายังไม่ปิดการขาย → มาร์กปิดงาน (ได้งาน) พร้อมมูลค่าจริง
-  if (cust.status !== ST_WON) {
-    await db.update(customers).set({
-      status: ST_WON,
-      amountActual: cust.amountActual ?? String(contract),
-      closedAt: cust.closedAt || today(), updatedAt: new Date(),
-    }).where(eq(customers.id, customerId))
-    await db.insert(activityLog).values({ customerId, userId: me.id, action: 'status', field: 'สถานะติดตาม', oldValue: cust.status, newValue: ST_WON })
-  }
-  await db.insert(activityLog).values({ customerId, projectId: pj.id, userId: me.id, action: 'project-open', newValue: code + ' (เปิดตรง ไม่มีใบเสนอ)' })
-
-  return NextResponse.json({ ok: true, id: pj.id, code })
 }
