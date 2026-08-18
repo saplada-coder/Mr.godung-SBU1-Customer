@@ -220,6 +220,12 @@ export default async function QuotePrintPage({ params }: { params: Promise<{ id:
 
 const PRINT_CSS = `
 .qprint{background:#777;min-height:100vh;padding:20px 0;font-family:var(--font);color:#111}
+/* ล้างสไตล์ตารางส่วนกลางของแอป (min-width 1180px, sticky header, hover ฯลฯ) ที่ทำให้ตารางทะลุขอบ A4 */
+.qprint table{min-width:0;width:100%;border-collapse:collapse}
+.qprint thead th{position:static;cursor:default;white-space:normal}
+.qprint tbody tr:hover td{background:transparent}
+.qprint tbody td,.qprint thead th{border-bottom:none;padding:0}
+.qprint table.items th,.qprint table.insts th{color:#111;font-size:11px}
 .qprint .page{background:#fff;width:210mm;min-height:290mm;margin:0 auto 18px;padding:12mm 11mm;box-shadow:0 2px 14px rgba(0,0,0,.35);font-size:12.5px;line-height:1.45;position:relative}
 .qprint .pre{white-space:pre-wrap}
 .qprint .b{font-weight:700}.qprint .c{text-align:center}.qprint .r{text-align:right}
