@@ -12,6 +12,10 @@ type Me = { id: number; email: string; name: string | null; image: string | null
 type Cust = { id: number; code: string; bu: string; name: string | null; chname: string | null; province: string | null; status: string; shownVal: number | null; d: string | null; isFinal: boolean }
 const Svg = ({ html }: { html: string }) => <div dangerouslySetInnerHTML={{ __html: html }} />
 
+/* ช่องจำนวนเงินแบบมี , คั่นหลักพัน (เก็บค่าจริงเป็นเลขล้วน) */
+const stripC = (s: string) => s.replace(/[^\d]/g, '')
+const fmtC = (s: string) => (s ? Number(s).toLocaleString('en-US') : '')
+
 /* ================= รายการงานก่อสร้าง + ภาพรวมบริษัท ================= */
 export default function ProjectsView({ me, records, limitedData, showToast, onChanged, openProjectId, onOpenedProject }: {
   me: Me; records: Cust[]; limitedData?: boolean; showToast: (m: string) => void; onChanged: () => void
@@ -300,6 +304,7 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
   const [tab, setTab] = useState<'overview' | 'inst' | 'exp' | 'budget'>('overview')
   const [busy, setBusy] = useState(false)
   const [expOpen, setExpOpen] = useState<ExpenseRow | 'new' | null>(null)
+  const [instOpen, setInstOpen] = useState<InstRow | 'new' | null>(null)
   const [lightbox, setLightbox] = useState<string | null>(null)
   const [expCat, setExpCat] = useState(''); const [expStat, setExpStat] = useState('')
 
@@ -430,7 +435,10 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
         {/* ================= งวดงาน ================= */}
         {tab === 'inst' && (
           <div className="form" style={{ gridTemplateColumns: '1fr' }}>
-            <div className="field full"><div className="hintline">รวมงวด ฿{commas(d.installments.reduce((a, i) => a + i.amount, 0))} · รับแล้ว ฿{commas(received)} — คลิกสถานะเพื่อเปลี่ยน</div></div>
+            <div className="field full" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+              <div className="hintline">รวมงวด ฿{commas(d.installments.reduce((a, i) => a + i.amount, 0))} / สัญญา ฿{commas(p.contractAmount)} · รับแล้ว ฿{commas(received)} — คลิกสถานะเพื่อเปลี่ยน</div>
+              {editable && <button className="btn btn-primary btn-sm" onClick={() => setInstOpen('new')}>+ เพิ่มงวด</button>}
+            </div>
             {d.installments.map((i) => {
               const wm = instWorkMeta(i.workStatus), pmm = instPayMeta(i.payStatus)
               return (
@@ -455,6 +463,7 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
                           รับ ฿{commas(i.paidAmount ?? i.amount)}{i.paidAt ? ' · ' + thDate(i.paidAt) : ''}
                         </span>
                       )}
+                      {editable && <button className="row-btn" onClick={() => setInstOpen(i)}>แก้ไข</button>}
                     </div>
                   </div>
                 </div>
@@ -539,6 +548,11 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
             budgetInfo={(cat) => ({ budget: budgetOf(cat), spent: spentOf(cat) })}
             onClose={() => setExpOpen(null)}
             onSaved={() => { setExpOpen(null); load(); onChanged() }} showToast={showToast} />
+        )}
+        {instOpen && (
+          <InstallmentModal projectId={id} contract={p.contractAmount} inst={instOpen === 'new' ? null : instOpen}
+            onClose={() => setInstOpen(null)}
+            onSaved={() => { setInstOpen(null); load(); onChanged() }} showToast={showToast} />
         )}
         {lightbox && (
           <div className="modal-bd" style={{ zIndex: 90, cursor: 'zoom-out' }} onClick={() => setLightbox(null)}>
@@ -692,6 +706,64 @@ function ExpenseModal({ projectId, exp, admin, budgetInfo, onClose, onSaved, sho
         </div>
         <div className="modal-f">
           {exp && <button className="btn" style={{ color: '#b0281c', marginRight: 'auto' }} onClick={del}>ลบรายการ</button>}
+          <button className="btn" onClick={onClose}>ยกเลิก</button>
+          <button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? 'กำลังบันทึก…' : 'บันทึก'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ---------------- ฟอร์มเพิ่ม/แก้ไขงวดงาน ---------------- */
+function InstallmentModal({ projectId, contract, inst, onClose, onSaved, showToast }: {
+  projectId: number; contract: number; inst: InstRow | null
+  onClose: () => void; onSaved: () => void; showToast: (m: string) => void
+}) {
+  const [f, setF] = useState({
+    title: inst?.title || '',
+    percent: inst?.percent != null ? String(inst.percent) : '',
+    amount: inst ? String(Math.round(inst.amount)) : '',
+    detail: inst?.detail || '',
+    note: inst?.note || '',
+    dueDate: inst?.dueDate || '',
+  })
+  const [busy, setBusy] = useState(false)
+  const paid = inst?.payStatus === 'รับเงินแล้ว'
+
+  const setPct = (v: string) => setF((o) => ({ ...o, percent: v, amount: +v > 0 && contract > 0 ? String(Math.round(contract * +v / 100)) : o.amount }))
+
+  const save = async () => {
+    if (!f.title.trim()) { showToast('ระบุชื่องวด'); return }
+    if (!(+f.amount >= 0) || f.amount === '') { showToast('ระบุจำนวนเงินของงวด'); return }
+    setBusy(true)
+    const body = { title: f.title, percent: f.percent === '' ? null : +f.percent, amount: +f.amount, detail: f.detail, note: f.note, dueDate: f.dueDate || null }
+    const r = inst
+      ? await fetch(`/api/installments/${inst.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+      : await fetch(`/api/projects/${projectId}/installments`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    setBusy(false)
+    if (r.ok) { showToast(inst ? 'แก้ไขงวดแล้ว' : 'เพิ่มงวดแล้ว'); onSaved() } else showToast((await r.json()).error || 'บันทึกไม่สำเร็จ')
+  }
+  const del = async () => {
+    if (!inst || !window.confirm(`ลบ "${inst.title}" ?`)) return
+    const r = await fetch(`/api/installments/${inst.id}`, { method: 'DELETE' })
+    if (r.ok) { showToast('ลบงวดแล้ว'); onSaved() } else showToast((await r.json()).error || 'ลบไม่สำเร็จ')
+  }
+
+  return (
+    <div className="modal-bd" style={{ zIndex: 80 }} onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="modal" role="dialog" aria-modal style={{ maxWidth: 520 }}>
+        <div className="modal-h"><div><h3>{inst ? `แก้ไข ${inst.title}` : 'เพิ่มงวดใหม่'}</h3><div className="sub">กรอก % แล้วระบบคำนวณเงินจากมูลค่าสัญญา ฿{commas(contract)} ให้ — หรือกรอกเงินตรงๆ ได้</div></div><button className="modal-x" onClick={onClose}>×</button></div>
+        <div className="form">
+          <div className="field full"><label>ชื่องวด *</label><input value={f.title} onChange={(e) => setF((o) => ({ ...o, title: e.target.value }))} placeholder={`เช่น งวดที่ ${inst?.seq ?? ''}`} autoFocus={!inst} /></div>
+          <div className="field"><label>เปอร์เซ็นต์ (%)</label><input type="number" value={f.percent} onChange={(e) => setPct(e.target.value)} placeholder="เช่น 10" /></div>
+          <div className="field"><label>จำนวนเงิน (บาท) *</label><input inputMode="numeric" value={fmtC(f.amount)} onChange={(e) => setF((o) => ({ ...o, amount: stripC(e.target.value) }))} /></div>
+          <div className="field full"><label>รายละเอียดงานของงวด</label><textarea rows={3} value={f.detail} onChange={(e) => setF((o) => ({ ...o, detail: e.target.value }))} placeholder={'- งานโครงสร้าง... แล้วเสร็จ'} /></div>
+          <div className="field"><label>กำหนดส่งงาน</label><input type="date" value={f.dueDate} onChange={(e) => setF((o) => ({ ...o, dueDate: e.target.value }))} /></div>
+          <div className="field"><label>หมายเหตุ</label><input value={f.note} onChange={(e) => setF((o) => ({ ...o, note: e.target.value }))} /></div>
+          {paid && <div className="field full"><div className="hintline">งวดนี้รับเงินแล้ว — แก้ไขได้แต่ลบไม่ได้ (ต้องเปลี่ยนสถานะเงินกลับก่อนถึงจะลบได้)</div></div>}
+        </div>
+        <div className="modal-f">
+          {inst && !paid && <button className="btn" style={{ color: '#b0281c', marginRight: 'auto' }} onClick={del}>ลบงวดนี้</button>}
           <button className="btn" onClick={onClose}>ยกเลิก</button>
           <button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? 'กำลังบันทึก…' : 'บันทึก'}</button>
         </div>
