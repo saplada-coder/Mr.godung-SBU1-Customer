@@ -181,3 +181,13 @@ export const DEFAULT_BUILD_DAYS = 90
 
 /** สิทธิ์อนุมัติ (ใบเสนอราคา/ค่าใช้จ่าย) + ตั้งงบ + ปิดงาน */
 export const canApprove = isAdminUp
+
+/** ประเภทเอกสารการเงิน */
+export const BILL_KINDS = [
+  { k: 'invoice', label: 'ใบแจ้งหนี้/ใบวางบิล', short: 'ใบวางบิล', prefix: 'IV', c: '#b58600', b: '#fbeec0' },
+  { k: 'receipt', label: 'ใบเสร็จรับเงิน', short: 'ใบเสร็จ', prefix: 'RC', c: '#3f8f3a', b: '#dcedd2' },
+  { k: 'taxReceipt', label: 'ใบเสร็จรับเงิน/ใบกำกับภาษี', short: 'ใบกำกับภาษี', prefix: 'RT', c: '#2563c9', b: '#d9e8fb' },
+] as const
+export type BillKind = (typeof BILL_KINDS)[number]['k']
+export const billKindMeta = (k: string) => BILL_KINDS.find((x) => x.k === k) ?? BILL_KINDS[0]
+export const PAY_METHODS = ['โอนเงิน', 'เงินสด', 'เช็ค'] as const

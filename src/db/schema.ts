@@ -454,6 +454,69 @@ export const projectInstallmentsRelations = relations(projectInstallments, ({ on
   project: one(projects, { fields: [projectInstallments.projectId], references: [projects.id] }),
 }))
 
+/**
+ * เอกสารการเงินของงานก่อสร้าง — kind: 'invoice' ใบแจ้งหนี้/ใบวางบิล · 'receipt' ใบเสร็จรับเงิน
+ * · 'taxReceipt' ใบเสร็จรับเงิน/ใบกำกับภาษี — ยกเลิกได้แต่ห้ามลบ (เลขต้องรันต่อเนื่องตามหลักบัญชี)
+ */
+export const billingDocs = pgTable(
+  'billing_docs',
+  {
+    id: serial('id').primaryKey(),
+    projectId: integer('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+    kind: varchar('kind', { length: 12 }).notNull(),
+    /** IV-BU1-2608001 / RC-… / RT-… รันแยกประเภทต่อเดือนต่อ BU */
+    code: varchar('code', { length: 30 }).notNull(),
+    /** ใบเสร็จที่ออกจากใบแจ้งหนี้ → อ้างกลับ */
+    invoiceRefId: integer('invoice_ref_id'),
+    custName: varchar('cust_name', { length: 160 }),
+    custAddress: text('cust_address'),
+    custPhone: varchar('cust_phone', { length: 40 }),
+    custTaxId: varchar('cust_tax_id', { length: 20 }),
+    issueDate: date('issue_date').notNull(),
+    dueDate: date('due_date'),
+    vatPct: numeric('vat_pct', { precision: 5, scale: 2 }),
+    whtPct: numeric('wht_pct', { precision: 5, scale: 2 }),
+    subtotal: numeric('subtotal', { precision: 14, scale: 2 }).notNull(),
+    vatAmount: numeric('vat_amount', { precision: 14, scale: 2 }).notNull().default('0'),
+    whtAmount: numeric('wht_amount', { precision: 14, scale: 2 }).notNull().default('0'),
+    total: numeric('total', { precision: 14, scale: 2 }).notNull(),
+    payMethod: varchar('pay_method', { length: 20 }),
+    payDate: date('pay_date'),
+    payRef: varchar('pay_ref', { length: 80 }),
+    note: text('note'),
+    status: varchar('status', { length: 12 }).notNull().default('ปกติ'),
+    cancelReason: text('cancel_reason'),
+    createdBy: integer('created_by').references(() => users.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('billing_project_idx').on(t.projectId), index('billing_kind_idx').on(t.kind)],
+)
+
+export const billingDocItems = pgTable(
+  'billing_doc_items',
+  {
+    id: serial('id').primaryKey(),
+    docId: integer('doc_id').notNull().references(() => billingDocs.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    description: text('description').notNull(),
+    amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
+    /** โยงกลับงวดที่ถูกวางบิล/รับเงิน (null = บรรทัดที่พิมพ์เพิ่มเอง) */
+    installmentId: integer('installment_id'),
+  },
+  (t) => [index('billing_items_doc_idx').on(t.docId)],
+)
+
+export const billingDocsRelations = relations(billingDocs, ({ one, many }) => ({
+  project: one(projects, { fields: [billingDocs.projectId], references: [projects.id] }),
+  items: many(billingDocItems),
+}))
+export const billingDocItemsRelations = relations(billingDocItems, ({ one }) => ({
+  doc: one(billingDocs, { fields: [billingDocItems.docId], references: [billingDocs.id] }),
+}))
+
+export type BillingDoc = typeof billingDocs.$inferSelect
+export type BillingDocItem = typeof billingDocItems.$inferSelect
+
 export type Customer = typeof customers.$inferSelect
 export type NewCustomer = typeof customers.$inferInsert
 export type Appointment = typeof appointments.$inferSelect

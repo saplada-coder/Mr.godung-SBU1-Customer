@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   BUS, BU_NAMES, COST_CATS, costCatMeta, projMeta, expMeta, instWorkMeta, instPayMeta,
-  INST_WORK, INST_PAY, PROJECT_STATUSES, canEdit, isAdminUp, type Role,
+  INST_WORK, INST_PAY, PROJECT_STATUSES, BILL_KINDS, billKindMeta, PAY_METHODS, canEdit, isAdminUp, type Role,
 } from '@/lib/constants'
 import { commas, fmtB, thDate } from '@/lib/format'
 import { bizGroupedBars, bizProjectBars, bizSCurve, cumulative, pickImage, type ProjectRow, type ExpenseRow, type InstRow, type HistItem } from './biz-shared'
@@ -284,6 +284,13 @@ function CompanyCostBreakdown({ projects }: { projects: ProjectRow[] }) {
 }
 
 /* ================= หน้างานรายตัว (แท็บ) ================= */
+type BillingRow = {
+  id: number; kind: string; code: string; invoiceRefId: number | null
+  issueDate: string; dueDate: string | null; total: number; subtotal: number
+  vatAmount: number; whtAmount: number
+  payMethod: string | null; payDate: string | null; status: string; cancelReason: string | null
+  createdByName: string | null
+}
 type Detail = {
   project: {
     id: number; code: string; name: string; bu: string; customerId: number; quotationId: number | null
@@ -294,6 +301,7 @@ type Detail = {
   budgets: { category: string; amount: number }[]
   expenses: ExpenseRow[]
   installments: InstRow[]
+  billing: BillingRow[]
   history: HistItem[]
 }
 
@@ -301,10 +309,12 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
   id: number; me: Me; onClose: () => void; onChanged: () => void; showToast: (m: string) => void
 }) {
   const [d, setD] = useState<Detail | null>(null)
-  const [tab, setTab] = useState<'overview' | 'inst' | 'exp' | 'budget'>('overview')
+  const [tab, setTab] = useState<'overview' | 'inst' | 'exp' | 'budget' | 'bill'>('overview')
   const [busy, setBusy] = useState(false)
   const [expOpen, setExpOpen] = useState<ExpenseRow | 'new' | null>(null)
   const [instOpen, setInstOpen] = useState<InstRow | 'new' | null>(null)
+  // ฟอร์มออกเอกสารการเงิน — preselect ประเภท/งวด/ใบแจ้งหนี้อ้างอิงจากปุ่มลัด
+  const [billOpen, setBillOpen] = useState<{ kind: string; instIds: number[]; invoiceRefId?: number } | null>(null)
   const [lightbox, setLightbox] = useState<string | null>(null)
   const [expCat, setExpCat] = useState(''); const [expStat, setExpStat] = useState('')
 
@@ -363,7 +373,7 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
         </div>
 
         <div className="tabs">
-          {([['overview', 'ภาพรวม & กราฟ'], ['inst', `งวดงาน (${d.installments.length})`], ['exp', `ค่าใช้จ่าย (${d.expenses.length})`], ['budget', 'งบประมาณ']] as const).map(([k, l]) => (
+          {([['overview', 'ภาพรวม & กราฟ'], ['inst', `งวดงาน (${d.installments.length})`], ['exp', `ค่าใช้จ่าย (${d.expenses.length})`], ['bill', `เอกสารเงิน (${d.billing.length})`], ['budget', 'งบประมาณ']] as const).map(([k, l]) => (
             <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>
           ))}
         </div>
@@ -464,6 +474,8 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
                         </span>
                       )}
                       {editable && <button className="row-btn" onClick={() => setInstOpen(i)}>แก้ไข</button>}
+                      {editable && i.payStatus === 'ยังไม่วางบิล' && <button className="row-btn" style={{ color: '#b58600' }} onClick={() => setBillOpen({ kind: 'invoice', instIds: [i.id] })}>📄 วางบิล</button>}
+                      {editable && i.payStatus === 'วางบิลแล้ว' && <button className="row-btn" style={{ color: '#3f8f3a' }} onClick={() => setBillOpen({ kind: 'receipt', instIds: [i.id] })}>🧾 ออกใบเสร็จ</button>}
                     </div>
                   </div>
                 </div>
@@ -535,6 +547,63 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
           </div>
         )}
 
+        {/* ================= เอกสารเงิน ================= */}
+        {tab === 'bill' && (
+          <div className="form" style={{ gridTemplateColumns: '1fr' }}>
+            <div className="field full" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+              <div className="hintline">ใบแจ้งหนี้/ใบเสร็จออกจากงวดของงาน — สถานะเงินของงวดอัปเดตให้อัตโนมัติ · เอกสารยกเลิกได้แต่ลบไม่ได้ (เลขรันต่อเนื่อง)</div>
+              {editable && <button className="btn btn-primary btn-sm" onClick={() => setBillOpen({ kind: 'invoice', instIds: [] })}>+ ออกเอกสาร</button>}
+            </div>
+            {d.billing.map((doc) => {
+              const km = billKindMeta(doc.kind)
+              const cancelled = doc.status === 'ยกเลิก'
+              return (
+                <div className="arow" key={doc.id} style={cancelled ? { opacity: 0.55 } : undefined}>
+                  <div className="ab" style={{ background: km.c }} />
+                  <div className="aw">
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span className="an" style={cancelled ? { textDecoration: 'line-through' } : undefined}>{doc.code}</span>
+                      <span className="qchip" style={{ color: km.c, background: km.b, cursor: 'default' }}>{km.label}</span>
+                      {cancelled && <span className="qchip" style={{ color: '#b0281c', background: '#f4dbd7', cursor: 'default' }}>ยกเลิก</span>}
+                    </div>
+                    <div className="as">
+                      {thDate(doc.issueDate)}
+                      {doc.kind === 'invoice' && doc.dueDate ? ` · ครบกำหนด ${thDate(doc.dueDate)}` : ''}
+                      {doc.kind !== 'invoice' && doc.payDate ? ` · รับเงิน ${thDate(doc.payDate)}${doc.payMethod ? ' (' + doc.payMethod + ')' : ''}` : ''}
+                      {doc.whtAmount > 0 ? ` · หัก ณ ที่จ่าย ฿${commas(doc.whtAmount)}` : ''}
+                      {doc.vatAmount > 0 ? ` · VAT ฿${commas(doc.vatAmount)}` : ''}
+                      {' · โดย ' + (doc.createdByName || '—')}
+                      {cancelled && doc.cancelReason ? ` · เหตุผล: ${doc.cancelReason}` : ''}
+                    </div>
+                  </div>
+                  <div className="ad">฿{commas(doc.total)}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    <button className="row-btn" onClick={() => window.open(`/billing/${doc.id}/print`, '_blank')}>🖨 พิมพ์</button>
+                    {!cancelled && doc.kind === 'invoice' && editable && (
+                      <button className="row-btn" style={{ color: '#3f8f3a' }}
+                        onClick={() => setBillOpen({ kind: 'receipt', instIds: d.installments.filter((i) => i.payStatus === 'วางบิลแล้ว').map((i) => i.id), invoiceRefId: doc.id })}>
+                        ออกใบเสร็จ
+                      </button>
+                    )}
+                    {!cancelled && admin && d.project.status !== 'ปิดงาน' && (
+                      <button className="row-btn" style={{ color: '#b0281c' }}
+                        onClick={async () => {
+                          const reason = window.prompt(`ยกเลิก ${doc.code}?\nระบุเหตุผล:`)
+                          if (!reason?.trim()) return
+                          const r = await fetch(`/api/billing/${doc.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'cancel', reason }) })
+                          if (r.ok) { showToast('ยกเลิกเอกสารแล้ว'); load(); onChanged() } else showToast((await r.json()).error || 'ยกเลิกไม่สำเร็จ')
+                        }}>
+                        ยกเลิก
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+            {!d.billing.length && <div className="empty">ยังไม่มีเอกสาร — กด &quot;วางบิล&quot; จากงวดในแท็บงวดงาน หรือ &quot;+ ออกเอกสาร&quot;</div>}
+          </div>
+        )}
+
         {/* ================= งบประมาณ ================= */}
         {tab === 'budget' && (
           <BudgetTab d={d} admin={admin} editable={editable} busy={busy}
@@ -553,6 +622,12 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
           <InstallmentModal projectId={id} contract={p.contractAmount} inst={instOpen === 'new' ? null : instOpen}
             onClose={() => setInstOpen(null)}
             onSaved={() => { setInstOpen(null); load(); onChanged() }} showToast={showToast} />
+        )}
+        {billOpen && (
+          <BillingModal projectId={id} installments={d.installments} preset={billOpen}
+            onClose={() => setBillOpen(null)}
+            onSaved={(docId) => { setBillOpen(null); load(); onChanged(); window.open(`/billing/${docId}/print`, '_blank') }}
+            showToast={showToast} />
         )}
         {lightbox && (
           <div className="modal-bd" style={{ zIndex: 90, cursor: 'zoom-out' }} onClick={() => setLightbox(null)}>
@@ -766,6 +841,147 @@ function InstallmentModal({ projectId, contract, inst, onClose, onSaved, showToa
           {inst && !paid && <button className="btn" style={{ color: '#b0281c', marginRight: 'auto' }} onClick={del}>ลบงวดนี้</button>}
           <button className="btn" onClick={onClose}>ยกเลิก</button>
           <button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? 'กำลังบันทึก…' : 'บันทึก'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ---------------- ฟอร์มออกเอกสารการเงิน (ใบวางบิล/ใบเสร็จ/ใบกำกับภาษี) ---------------- */
+function BillingModal({ projectId, installments, preset, onClose, onSaved, showToast }: {
+  projectId: number; installments: InstRow[]
+  preset: { kind: string; instIds: number[]; invoiceRefId?: number }
+  onClose: () => void; onSaved: (docId: number) => void; showToast: (m: string) => void
+}) {
+  const today = new Date().toISOString().slice(0, 10)
+  const [kind, setKind] = useState(preset.kind)
+  const [sel, setSel] = useState<Set<number>>(new Set(preset.instIds))
+  const [extra, setExtra] = useState<{ description: string; amount: string }[]>([])
+  const [cust, setCust] = useState({ name: '', address: '', phone: '', taxId: '' })
+  const [vat, setVat] = useState(false)
+  const [wht, setWht] = useState(false)
+  const [f, setF] = useState({ issueDate: today, dueDate: '', payMethod: 'โอนเงิน', payDate: today, payRef: '', note: '' })
+  const [busy, setBusy] = useState(false)
+
+  // ดึงข้อมูลลูกค้าตั้งต้นจากใบเสนอราคาของงาน (fallback CRM)
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}/billing`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j?.custInfo) setCust(j.custInfo) })
+      .catch(() => {})
+  }, [projectId])
+  // เลือกใบกำกับภาษี → เปิด VAT ให้อัตโนมัติ
+  useEffect(() => { if (kind === 'taxReceipt') setVat(true) }, [kind])
+
+  const isInvoice = kind === 'invoice'
+  // งวดที่เลือกได้: วางบิล → งวดที่ยังไม่วางบิล · ใบเสร็จ → งวดที่ยังไม่รับเงิน (+ที่ถูก preselect ไว้)
+  const pickable = installments.filter((i) =>
+    sel.has(i.id) || (isInvoice ? i.payStatus === 'ยังไม่วางบิล' : i.payStatus !== 'รับเงินแล้ว'))
+  const toggle = (id: number) => setSel((o) => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n })
+
+  const subtotal = installments.filter((i) => sel.has(i.id)).reduce((a, i) => a + i.amount, 0)
+    + extra.reduce((a, i) => a + (+i.amount || 0), 0)
+  const vatAmount = vat ? Math.round(subtotal * 7 / 100) : 0
+  const whtAmount = wht ? Math.round(subtotal * 3 / 100) : 0
+  const total = subtotal + vatAmount - whtAmount
+
+  const save = async () => {
+    if (!sel.size && !extra.some((x) => x.description.trim() && +x.amount > 0)) { showToast('เลือกงวดหรือเพิ่มรายการอย่างน้อย 1 รายการ'); return }
+    if (kind === 'taxReceipt' && !cust.taxId.trim()) { showToast('ใบกำกับภาษีต้องกรอกเลขประจำตัวผู้เสียภาษีของลูกค้า'); return }
+    setBusy(true)
+    const r = await fetch(`/api/projects/${projectId}/billing`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        kind, installmentIds: [...sel],
+        items: extra.filter((x) => x.description.trim() && +x.amount > 0).map((x) => ({ description: x.description, amount: +x.amount })),
+        custName: cust.name, custAddress: cust.address, custPhone: cust.phone, custTaxId: cust.taxId,
+        vatPct: vat ? 7 : 0, whtPct: wht ? 3 : 0,
+        issueDate: f.issueDate, dueDate: f.dueDate || null,
+        payMethod: f.payMethod, payDate: f.payDate, payRef: f.payRef, note: f.note,
+        invoiceRefId: preset.invoiceRefId ?? null,
+      }),
+    })
+    setBusy(false)
+    const j = await r.json()
+    if (r.ok) { showToast(`ออก ${billKindMeta(kind).label} ${j.code} แล้ว`); onSaved(j.id) }
+    else showToast(j.error || 'ออกเอกสารไม่สำเร็จ')
+  }
+
+  return (
+    <div className="modal-bd" style={{ zIndex: 80 }} onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="modal" role="dialog" aria-modal style={{ width: 'min(640px,100%)' }}>
+        <div className="modal-h"><div><h3>ออกเอกสารการเงิน</h3><div className="sub">เอกสารดึงข้อมูลจากงวดของงาน — สถานะเงินงวดอัปเดตอัตโนมัติเมื่อบันทึก</div></div><button className="modal-x" onClick={onClose}>×</button></div>
+        <div className="form">
+          <div className="field full"><label>ประเภทเอกสาร</label>
+            <span className="seg">
+              {BILL_KINDS.map((k) => <button key={k.k} type="button" className={kind === k.k ? 'on' : ''} onClick={() => setKind(k.k)}>{k.label}</button>)}
+            </span>
+            {kind === 'taxReceipt' && <div className="hintline">ใบกำกับภาษี: ต้องมีเลขผู้เสียภาษีลูกค้า + คิด VAT 7% (นามบริษัท)</div>}
+          </div>
+
+          <div className="fs"><div className="fs-t">งวดที่{isInvoice ? 'วางบิล' : 'รับเงิน'}</div></div>
+          <div className="field full">
+            {pickable.length ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {pickable.map((i) => (
+                  <label key={i.id} style={{ display: 'flex', gap: 9, alignItems: 'center', cursor: 'pointer', fontSize: 13, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 9, background: sel.has(i.id) ? 'var(--accent-soft, var(--surface-2))' : 'var(--surface-2)' }}>
+                    <input type="checkbox" checked={sel.has(i.id)} onChange={() => toggle(i.id)} style={{ width: 16, height: 16 }} />
+                    <span style={{ flex: 1 }}><b>{i.title}</b> <span style={{ color: 'var(--text-faint)', fontSize: 11.5 }}>({instPayMeta(i.payStatus).k})</span></span>
+                    <b>฿{commas(i.amount)}</b>
+                  </label>
+                ))}
+              </div>
+            ) : <div className="hintline">ไม่มีงวดที่{isInvoice ? 'รอวางบิล' : 'รอรับเงิน'} — เพิ่มรายการเองด้านล่างได้</div>}
+            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {extra.map((x, i) => (
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 130px 24px', gap: 6 }}>
+                  <input value={x.description} placeholder="รายการเพิ่มเติม เช่น ค่าเพิ่มงาน…" onChange={(e) => setExtra((o) => o.map((y, z) => (z === i ? { ...y, description: e.target.value } : y)))} style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', color: 'var(--text)', fontSize: 13 }} />
+                  <input inputMode="numeric" value={fmtC(x.amount)} placeholder="บาท" onChange={(e) => setExtra((o) => o.map((y, z) => (z === i ? { ...y, amount: stripC(e.target.value) } : y)))} style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', color: 'var(--text)', fontSize: 13, textAlign: 'right' }} />
+                  <button type="button" className="qi-x" onClick={() => setExtra((o) => o.filter((_, z) => z !== i))}>×</button>
+                </div>
+              ))}
+              <button type="button" className="btn btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => setExtra((o) => [...o, { description: '', amount: '' }])}>+ เพิ่มรายการเอง</button>
+            </div>
+          </div>
+
+          <div className="fs"><div className="fs-t">ข้อมูลลูกค้าบนเอกสาร</div></div>
+          <div className="field"><label>ชื่อลูกค้า</label><input value={cust.name} onChange={(e) => setCust((o) => ({ ...o, name: e.target.value }))} /></div>
+          <div className="field"><label>เบอร์โทร</label><input value={cust.phone} onChange={(e) => setCust((o) => ({ ...o, phone: e.target.value }))} /></div>
+          <div className="field full"><label>ที่อยู่</label><input value={cust.address} onChange={(e) => setCust((o) => ({ ...o, address: e.target.value }))} /></div>
+          <div className="field"><label>เลขประจำตัวผู้เสียภาษี{kind === 'taxReceipt' ? ' *' : ''}</label><input value={cust.taxId} onChange={(e) => setCust((o) => ({ ...o, taxId: e.target.value }))} inputMode="numeric" maxLength={20} /></div>
+
+          <div className="fs"><div className="fs-t">ยอดเงิน &amp; เงื่อนไข</div></div>
+          <div className="field"><label>วันที่ออกเอกสาร</label><input type="date" value={f.issueDate} onChange={(e) => setF((o) => ({ ...o, issueDate: e.target.value }))} /></div>
+          {isInvoice ? (
+            <div className="field"><label>ครบกำหนดชำระ</label><input type="date" value={f.dueDate} onChange={(e) => setF((o) => ({ ...o, dueDate: e.target.value }))} /></div>
+          ) : (
+            <>
+              <div className="field"><label>วันที่รับเงิน</label><input type="date" value={f.payDate} onChange={(e) => setF((o) => ({ ...o, payDate: e.target.value }))} /></div>
+              <div className="field"><label>ชำระโดย</label><select value={f.payMethod} onChange={(e) => setF((o) => ({ ...o, payMethod: e.target.value }))}>{PAY_METHODS.map((m) => <option key={m}>{m}</option>)}</select></div>
+              <div className="field"><label>อ้างอิง (เลขที่เช็ค/สลิป)</label><input value={f.payRef} onChange={(e) => setF((o) => ({ ...o, payRef: e.target.value }))} /></div>
+            </>
+          )}
+          <div className="field full" style={{ flexDirection: 'row', gap: 18, alignItems: 'center' }}>
+            <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', cursor: kind === 'taxReceipt' ? 'default' : 'pointer', fontSize: 13 }}>
+              <input type="checkbox" checked={vat} disabled={kind === 'taxReceipt'} onChange={(e) => setVat(e.target.checked)} />VAT 7%
+            </label>
+            <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
+              <input type="checkbox" checked={wht} onChange={(e) => setWht(e.target.checked)} />หัก ณ ที่จ่าย 3%
+            </label>
+          </div>
+          <div className="field full"><label>หมายเหตุ</label><input value={f.note} onChange={(e) => setF((o) => ({ ...o, note: e.target.value }))} /></div>
+          <div className="field full">
+            <div className="sumbox">
+              <div><span>รวมเงิน</span><b>฿{commas(subtotal)}</b></div>
+              {vat && <div><span>VAT 7%</span><b>฿{commas(vatAmount)}</b></div>}
+              {wht && <div><span>หัก ณ ที่จ่าย 3%</span><b style={{ color: 'var(--accent)' }}>−฿{commas(whtAmount)}</b></div>}
+              <div className="grand"><span>{isInvoice ? 'ยอดที่ต้องชำระ' : 'ยอดรับสุทธิ'}</span><b>฿{commas(total)}</b></div>
+            </div>
+          </div>
+        </div>
+        <div className="modal-f">
+          <button className="btn" onClick={onClose}>ยกเลิก</button>
+          <button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? 'กำลังออกเอกสาร…' : `ออก${billKindMeta(kind).short} + พิมพ์`}</button>
         </div>
       </div>
     </div>

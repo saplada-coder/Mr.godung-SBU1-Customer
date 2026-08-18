@@ -2,7 +2,7 @@
 import { sql } from 'drizzle-orm'
 import type { getDb } from '@/db'
 import {
-  quotations, projects,
+  quotations, projects, billingDocs,
   type Quotation, type QuotationItem, type QuotationCost, type QuotationInstallment,
 } from '@/db/schema'
 
@@ -28,6 +28,50 @@ export async function genDocCode(db: ReturnType<typeof getDb>, kind: 'QT' | 'PJ'
     .from(table)
     .where(sql`code like ${prefix + '%'}`)) as unknown as [{ nextSeq: number }]
   return `${prefix}${String(nextSeq).padStart(3, '0')}`
+}
+
+/** เลขเอกสารการเงิน: {IV|RC|RT}-{BU}-{ปี2หลัก}{เดือน}{ลำดับ3หลัก} รันแยก prefix ต่อเดือนต่อ BU */
+export async function genBillingCode(db: ReturnType<typeof getDb>, prefix: string, bu: string, dateStr: string) {
+  const ym = dateStr.slice(2, 4) + dateStr.slice(5, 7)
+  const codePrefix = `${prefix}-${bu}-${ym}`
+  const [{ nextSeq }] = (await db
+    .select({ nextSeq: sql<number>`coalesce(max(right(code,3)::int),0)+1` })
+    .from(billingDocs)
+    .where(sql`code like ${codePrefix + '%'}`)) as unknown as [{ nextSeq: number }]
+  return `${codePrefix}${String(nextSeq).padStart(3, '0')}`
+}
+
+/* ---------- จำนวนเงินเป็นตัวอักษรไทย (สำหรับใบเสร็จ/ใบกำกับภาษี) ---------- */
+const TH_D = ['ศูนย์', 'หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า']
+const TH_P = ['', 'สิบ', 'ร้อย', 'พัน', 'หมื่น', 'แสน']
+function readUnderMillion(n: number): string {
+  if (n === 0) return ''
+  const s = String(n)
+  let out = ''
+  for (let i = 0; i < s.length; i++) {
+    const d = +s[i], pos = s.length - i - 1
+    if (!d) continue
+    if (pos === 1 && d === 1) out += 'สิบ'
+    else if (pos === 1 && d === 2) out += 'ยี่สิบ'
+    else if (pos === 0 && d === 1 && s.length > 1) out += 'เอ็ด'
+    else out += TH_D[d] + TH_P[pos]
+  }
+  return out
+}
+function readNum(n: number): string {
+  if (n < 1_000_000) return readUnderMillion(n) || 'ศูนย์'
+  const head = readNum(Math.floor(n / 1_000_000))
+  const rest = n % 1_000_000
+  return head + 'ล้าน' + (rest ? readUnderMillion(rest) : '')
+}
+/** แปลงจำนวนเงินเป็นตัวอักษรไทย เช่น 1250.50 → "หนึ่งพันสองร้อยห้าสิบบาทห้าสิบสตางค์" */
+export function bahtText(amount: number): string {
+  const n = Math.abs(amount)
+  const baht = Math.floor(n)
+  const satang = Math.round((n - baht) * 100)
+  let out = (amount < 0 ? 'ลบ' : '') + readNum(baht) + 'บาท'
+  out += satang > 0 ? readUnderMillion(satang) + 'สตางค์' : 'ถ้วน'
+  return out
 }
 
 export type QuoteTotals = {

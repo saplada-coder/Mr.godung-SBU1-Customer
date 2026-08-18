@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { desc, eq } from 'drizzle-orm'
 import { getDb } from '@/db'
-import { projects, projectBudgets, projectInstallments, expenses, customers, users, activityLog } from '@/db/schema'
+import { projects, projectBudgets, projectInstallments, expenses, customers, users, activityLog, billingDocs } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
 import { n0, num, today } from '@/lib/biz'
 import { canEdit, canApprove, isAdminUp, COST_CAT_KEYS, PROJECT_STATUSES, DEFAULT_INSTALLMENTS } from '@/lib/constants'
@@ -16,7 +16,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const [p] = await db.select().from(projects).where(eq(projects.id, id)).limit(1)
   if (!p) return NextResponse.json({ error: 'not found' }, { status: 404 })
 
-  const [budgets, exps, insts, [cust], allUsers, acts] = await Promise.all([
+  const [budgets, exps, insts, [cust], allUsers, acts, bills] = await Promise.all([
     db.select().from(projectBudgets).where(eq(projectBudgets.projectId, id)),
     db.select().from(expenses).where(eq(expenses.projectId, id)).orderBy(desc(expenses.expenseDate), desc(expenses.id)),
     db.select().from(projectInstallments).where(eq(projectInstallments.projectId, id)),
@@ -25,6 +25,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     db.select({ action: activityLog.action, field: activityLog.field, oldValue: activityLog.oldValue, newValue: activityLog.newValue, at: activityLog.createdAt, who: users.name, email: users.email })
       .from(activityLog).leftJoin(users, eq(activityLog.userId, users.id))
       .where(eq(activityLog.projectId, id)).orderBy(desc(activityLog.createdAt)).limit(100),
+    db.select().from(billingDocs).where(eq(billingDocs.projectId, id)).orderBy(desc(billingDocs.id)),
   ])
   const userName = (uid: number | null) => { const u = allUsers.find((x) => x.id === uid); return u ? u.name || u.email : null }
 
@@ -47,6 +48,13 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     installments: insts.sort((a, b) => a.seq - b.seq).map((i) => ({
       id: i.id, seq: i.seq, title: i.title, detail: i.detail, percent: num(i.percent), amount: n0(i.amount),
       dueDate: i.dueDate, workStatus: i.workStatus, payStatus: i.payStatus, paidAt: i.paidAt, paidAmount: num(i.paidAmount), note: i.note,
+    })),
+    billing: bills.map((d) => ({
+      id: d.id, kind: d.kind, code: d.code, invoiceRefId: d.invoiceRefId,
+      issueDate: d.issueDate, dueDate: d.dueDate, total: n0(d.total), subtotal: n0(d.subtotal),
+      vatAmount: n0(d.vatAmount), whtAmount: n0(d.whtAmount),
+      payMethod: d.payMethod, payDate: d.payDate, status: d.status, cancelReason: d.cancelReason,
+      createdByName: userName(d.createdBy),
     })),
     history: acts.map((a) => ({ kind: a.action, field: a.field, oldValue: a.oldValue, newValue: a.newValue, at: a.at, who: a.who || a.email || 'ระบบ' })),
   })
