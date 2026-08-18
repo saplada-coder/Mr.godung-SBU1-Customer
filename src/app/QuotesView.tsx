@@ -54,7 +54,7 @@ export default function QuotesView({ me, records, limitedData, openQuoteId, onOp
   return (
     <>
       <div className="view-head">
-        <div><h1>ใบเสนอราคา</h1><p>สร้าง → ขออนุมัติภายใน → พิมพ์ส่งลูกค้า → ลูกค้าตกลง → เปิดงานก่อสร้าง (Budget Control)</p></div>
+        <div><h1>ใบเสนอราคา</h1><p>สร้าง → พิมพ์ส่งลูกค้า → ลูกค้าตกลง → เปิดงานก่อสร้าง (Budget Control)</p></div>
         {editable && <button className="btn btn-primary" onClick={() => setPickerOpen(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}><path d="M12 5v14M5 12h14" /></svg>สร้างใบเสนอราคา</button>}
       </div>
       <div className="tbar">
@@ -270,7 +270,11 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToas
     if (r.ok) { showToast('เปิดงานก่อสร้าง ' + j.code + ' แล้ว'); onChanged(); onClose(); onOpenProject(j.id) }
     else showToast(j.error || 'เปิดงานไม่สำเร็จ')
   }
-  const submitForApproval = async () => { if (await save(true)) { if (await action('submit')) showToast('ส่งขออนุมัติแล้ว') } }
+  /** มาร์กว่าส่งลูกค้าแล้ว — บันทึกก่อนอัตโนมัติถ้ายังแก้ไขอยู่ (flow ไม่มีขั้นอนุมัติภายใน) */
+  const markSent = async () => {
+    if (canEditDoc) { if (!(await save(true))) return }
+    if (await action('send')) showToast('มาร์กส่งลูกค้าแล้ว')
+  }
 
   if (!quote) return <div className="modal-bd"><div className="modal" style={{ padding: 40, textAlign: 'center', color: 'var(--text-dim)' }}>กำลังโหลด…</div></div>
   const m = qdocMeta(quote.status)
@@ -477,14 +481,7 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToas
           <span style={{ flex: 1 }} />
           {quote.status === 'ร่าง' && (mine || admin) && <button className="btn" style={{ color: '#b0281c' }} onClick={del}>ลบร่าง</button>}
           {canEditDoc && <button className="btn" disabled={busy} onClick={() => save()}>{busy ? 'กำลังบันทึก…' : 'บันทึก'}</button>}
-          {quote.status === 'ร่าง' && (mine || admin) && <button className="btn btn-primary" disabled={busy} onClick={submitForApproval}>ส่งขออนุมัติ</button>}
-          {quote.status === 'รออนุมัติ' && admin && (
-            <>
-              <button className="btn" style={{ color: '#b0281c' }} disabled={busy} onClick={async () => { const reason = window.prompt('เหตุผลที่ตีกลับ:'); if (reason?.trim()) { if (await action('reject', { reason })) showToast('ตีกลับแล้ว') } }}>ตีกลับ</button>
-              <button className="btn btn-primary" disabled={busy} onClick={async () => { if (await action('approve')) showToast('อนุมัติแล้ว') }}>✓ อนุมัติ</button>
-            </>
-          )}
-          {quote.status === 'อนุมัติแล้ว' && <button className="btn btn-primary" disabled={busy} onClick={async () => { if (await action('send')) showToast('มาร์กส่งลูกค้าแล้ว') }}>ส่งลูกค้าแล้ว</button>}
+          {['ร่าง', 'รออนุมัติ', 'อนุมัติแล้ว'].includes(quote.status) && <button className="btn btn-primary" disabled={busy} onClick={markSent}>✉ ส่งลูกค้าแล้ว</button>}
           {quote.status === 'ส่งลูกค้าแล้ว' && (
             <>
               <button className="btn" disabled={busy} onClick={revise}>แก้ไขเป็นฉบับใหม่</button>

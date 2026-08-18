@@ -102,7 +102,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       return NextResponse.json({ ok: true })
     }
     if (a === 'send') {
-      if (cur.status !== 'อนุมัติแล้ว') return NextResponse.json({ error: 'ต้องอนุมัติภายในก่อนส่งลูกค้า' }, { status: 400 })
+      // flow ปัจจุบันไม่มีขั้นอนุมัติภายใน — ส่งลูกค้าได้ตั้งแต่ใบร่าง (รวมใบเก่าที่ค้างสถานะอนุมัติ)
+      if (!['ร่าง', 'รออนุมัติ', 'อนุมัติแล้ว'].includes(cur.status)) return NextResponse.json({ error: 'ใบนี้ส่งลูกค้าไม่ได้จากสถานะปัจจุบัน' }, { status: 400 })
       await db.update(quotations).set({ status: 'ส่งลูกค้าแล้ว', sentAt: today(), updatedAt: new Date() }).where(eq(quotations.id, id))
       await db.update(customers).set({ quoteStatus: 'ส่งใบเสนอราคาแล้ว', updatedAt: new Date() }).where(eq(customers.id, cur.customerId))
       await log('quote-send', 'สถานะ', cur.status, 'ส่งลูกค้าแล้ว')

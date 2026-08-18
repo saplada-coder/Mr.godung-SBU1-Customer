@@ -3,18 +3,15 @@
 import { useCallback, useEffect, useState } from 'react'
 import { costCatMeta, isAdminUp, type Role } from '@/lib/constants'
 import { commas, thDate } from '@/lib/format'
-import { QuoteModal } from './QuotesView'
 
 type Me = { id: number; email: string; name: string | null; image: string | null; role: Role; bu: string | null }
-type PendingQuote = { id: number; code: string; rev: number; customerName: string; total: number; profit: number; profitPct: number; creatorName: string | null; updatedAt: string }
 type PendingExpense = { id: number; projectId: number | null; projectName: string; category: string; description: string; vendor: string | null; amount: number; expenseDate: string; receiptUrl: string | null; createdByName: string | null; createdAt: string; overBudget: boolean; overBy: number }
 
-/** กล่องรออนุมัติ — ใบเสนอราคา (ก่อนส่งลูกค้า) + ค่าใช้จ่าย (ทุกงาน) */
+/** กล่องรออนุมัติ — ค่าใช้จ่าย (งานก่อสร้างทุกงาน + สำนักงาน) */
 export default function ApprovalsView({ me, showToast, onChanged, onOpenProject }: {
   me: Me; showToast: (m: string) => void; onChanged: () => void; onOpenProject: (projectId: number) => void
 }) {
-  const [data, setData] = useState<{ quotes: PendingQuote[]; expenses: PendingExpense[] } | null>(null)
-  const [openQuote, setOpenQuote] = useState<number | null>(null)
+  const [data, setData] = useState<{ expenses: PendingExpense[] } | null>(null)
   const [lightbox, setLightbox] = useState<string | null>(null)
   const [sel, setSel] = useState<Set<number>>(new Set())
   const [bulkBusy, setBulkBusy] = useState(false)
@@ -54,7 +51,7 @@ export default function ApprovalsView({ me, showToast, onChanged, onOpenProject 
   }
 
   if (!data) return <div className="empty">กำลังโหลด…</div>
-  const total = data.quotes.length + data.expenses.length
+  const total = data.expenses.length
 
   return (
     <>
@@ -63,23 +60,6 @@ export default function ApprovalsView({ me, showToast, onChanged, onOpenProject 
       </div>
 
       <section className="card">
-        <div className="sec-h"><h2>ใบเสนอราคา — รออนุมัติภายใน</h2><span className="cnt-chip" style={{ background: '#b58600' }}>{data.quotes.length}</span></div>
-        <div className="alist">
-          {data.quotes.map((q) => (
-            <div className="arow" key={q.id}>
-              <div className="ab" style={{ background: '#b58600' }} />
-              <div className="aw">
-                <div className="an">{q.code}{q.rev > 1 ? ` (Rev.${q.rev})` : ''} · {q.customerName}</div>
-                <div className="as">ยอด ฿{commas(q.total)} · กำไรคาด ฿{commas(q.profit)} ({q.profitPct.toFixed(0)}%) · โดย {q.creatorName || '—'}</div>
-              </div>
-              <button className="row-btn" onClick={() => setOpenQuote(q.id)}>เปิดตรวจ / อนุมัติ</button>
-            </div>
-          ))}
-          {!data.quotes.length && <div className="empty">ไม่มีใบเสนอราคาค้างอนุมัติ 🎉</div>}
-        </div>
-      </section>
-
-      <section className="card mt">
         <div className="sec-h">
           <h2>ค่าใช้จ่าย — รออนุมัติ</h2><span className="cnt-chip" style={{ background: 'var(--accent)' }}>{data.expenses.length}</span>
           {admin && data.expenses.length > 1 && (
@@ -124,12 +104,6 @@ export default function ApprovalsView({ me, showToast, onChanged, onOpenProject 
         </div>
       </section>
 
-      {openQuote != null && (
-        <QuoteModal id={openQuote} me={me} showToast={showToast}
-          onClose={() => setOpenQuote(null)}
-          onChanged={() => { load(); onChanged() }}
-          onOpenProject={(pid) => { setOpenQuote(null); onOpenProject(pid) }} />
-      )}
       {lightbox && (
         <div className="modal-bd" style={{ zIndex: 90, cursor: 'zoom-out' }} onClick={() => setLightbox(null)}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
