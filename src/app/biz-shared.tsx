@@ -142,6 +142,57 @@ export function bizSCurve(
   return s + '</svg>'
 }
 
+/**
+ * กราฟแท่งภาพรวม Budget Control: กลุ่มละ 1 โปรเจค (เรียงแยก BU) + กลุ่มสุดท้าย "รวม"
+ * แต่ละกลุ่มมี 4 แท่ง (สัญญา/รับแล้ว/จ่ายแล้ว/กำไร) — รองรับค่าติดลบ (กำไรติดลบชี้ลงใต้เส้นศูนย์)
+ * ความกว้างคงที่ต่อกลุ่ม → เลื่อนแนวนอนใน .chart-xscroll เมื่อโปรเจคเยอะ
+ */
+export function bizProjectBars(
+  groups: { label: string; sub?: string; divider?: boolean; emph?: boolean }[],
+  series: { name: string; color: string; vals: number[] }[],
+) {
+  const bw = 13, gap = 3
+  const gw = Math.max(72, series.length * (bw + gap) + 26)
+  const padL = 46, padR = 10, padT = 14, padB = 36
+  const W = padL + padR + groups.length * gw
+  const H = 250
+  const ih = H - padT - padB
+  const allVals = series.flatMap((s) => s.vals)
+  const maxv = Math.max(1, ...allVals) * 1.1
+  const minv = Math.min(0, ...allVals) * 1.15
+  const y = (v: number) => padT + ((maxv - v) / (maxv - minv)) * ih
+  const fv = (v: number) => {
+    const a = Math.abs(v)
+    const s = a >= 1e6 ? (a / 1e6).toFixed(1) + 'M' : a >= 1e3 ? (a / 1e3).toFixed(0) + 'k' : String(Math.round(a))
+    return (v < 0 ? '−' : '') + s
+  }
+  let s = `<svg class="chartf" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
+  // เส้นกริด 4 ระดับ + เส้นศูนย์เข้มกว่า
+  for (let g = 0; g <= 4; g++) {
+    const gv = minv + (maxv - minv) * g / 4, yy = y(gv)
+    s += `<line class="gridline" x1="${padL}" y1="${yy.toFixed(1)}" x2="${W - padR}" y2="${yy.toFixed(1)}"/><text class="axis-v" x="${padL - 6}" y="${(yy + 3).toFixed(1)}" text-anchor="end">${fv(gv)}</text>`
+  }
+  if (minv < 0) s += `<line x1="${padL}" y1="${y(0).toFixed(1)}" x2="${W - padR}" y2="${y(0).toFixed(1)}" stroke="var(--text-faint)" stroke-width="1.2"/>`
+  groups.forEach((g, gi) => {
+    const gx = padL + gi * gw
+    if (g.divider) s += `<line x1="${gx.toFixed(1)}" y1="${padT}" x2="${gx.toFixed(1)}" y2="${padT + ih}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3"/>`
+    series.forEach((se, si) => {
+      const v = se.vals[gi] || 0
+      const bx = gx + (gw - series.length * (bw + gap) + gap) / 2 + si * (bw + gap)
+      const by = Math.min(y(0), y(v)), bh = Math.abs(y(v) - y(0))
+      // กำไรติดลบ → แดง ให้สะดุดตา
+      const color = v < 0 ? '#b0281c' : se.color
+      s += `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${bw}" height="${Math.max(0.5, bh).toFixed(1)}" rx="2.5" fill="${color}"${g.emph ? '' : ' opacity="0.92"'}><title>${g.label}${g.sub ? ' (' + g.sub + ')' : ''} — ${se.name}: ฿${Math.round(v).toLocaleString()}</title></rect>`
+      // ตัวเลขกำกับเฉพาะกลุ่ม "รวม" (กลุ่มอื่นดูจาก tooltip กันตัวเลขทับกัน)
+      if (g.emph && v !== 0) s += `<text class="bar-val" x="${(bx + bw / 2).toFixed(1)}" y="${(v >= 0 ? by - 4 : by + bh + 10).toFixed(1)}" text-anchor="middle">${fv(v)}</text>`
+    })
+    const lx = gx + gw / 2
+    s += `<text class="axis" x="${lx.toFixed(1)}" y="${H - 20}" text-anchor="middle" font-weight="${g.emph ? 800 : 700}">${g.label}</text>`
+    if (g.sub) s += `<text class="axis" x="${lx.toFixed(1)}" y="${H - 8}" text-anchor="middle" opacity="0.7">${g.sub}</text>`
+  })
+  return s + '</svg>'
+}
+
 /** สะสมรายวันจากรายการ (date, amount) → จุดกราฟ */
 export function cumulative(points: { d: string; v: number }[]): { t: number; v: number }[] {
   const sorted = [...points].filter((p) => p.d).sort((a, b) => (a.d < b.d ? -1 : 1))
