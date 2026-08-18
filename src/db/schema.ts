@@ -62,8 +62,6 @@ export const costCatEnum = pgEnum('cost_cat', [
 /** สถานะเอกสารใบเสนอราคา (varchar เหตุผลเดียวกับ LEAD_STATUSES — ข้อความไทยยาวเกิน pg enum) */
 export const QDOC_STATUSES = [
   'ร่าง',
-  'รออนุมัติ',
-  'อนุมัติแล้ว',
   'ส่งลูกค้าแล้ว',
   'ลูกค้าตกลง',
   'ถูกแทนที่',

@@ -18,8 +18,8 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   const [cur] = await db.select().from(quotations).where(eq(quotations.id, id)).limit(1)
   if (!cur) return NextResponse.json({ error: 'not found' }, { status: 404 })
   if (!(isAdminUp(me.role) || cur.createdBy === me.id)) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
-  if (!['อนุมัติแล้ว', 'ส่งลูกค้าแล้ว', 'ลูกค้าตกลง'].includes(cur.status))
-    return NextResponse.json({ error: 'ทำ Revision ได้เฉพาะใบที่อนุมัติ/ส่งแล้ว (ใบร่างแก้ได้ตรงๆ)' }, { status: 400 })
+  if (!['ส่งลูกค้าแล้ว', 'ลูกค้าตกลง'].includes(cur.status))
+    return NextResponse.json({ error: 'ทำ Revision ได้เฉพาะใบที่ส่งลูกค้าแล้ว (ใบร่างแก้ได้ตรงๆ)' }, { status: 400 })
   if (cur.projectId) return NextResponse.json({ error: 'ใบนี้เปิดงานก่อสร้างแล้ว แก้ไขไม่ได้' }, { status: 400 })
   if (cur.supersededById) return NextResponse.json({ error: 'ใบนี้มี Revision ใหม่อยู่แล้ว' }, { status: 400 })
 

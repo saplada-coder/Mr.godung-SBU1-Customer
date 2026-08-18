@@ -5,7 +5,7 @@ import { quotations, quotationItems, quotationCosts, quotationInstallments, cust
 import { getSessionUser } from '@/lib/auth'
 import { getSettings } from '@/lib/settings'
 import { serializeQuote, num, nstr, today } from '@/lib/biz'
-import { canEdit, isAdminUp, canApprove, COST_CAT_KEYS } from '@/lib/constants'
+import { canEdit, isAdminUp, COST_CAT_KEYS } from '@/lib/constants'
 
 function parseImgs(s: string | null): string[] | null {
   if (s == null) return null
@@ -15,7 +15,7 @@ function parseImgs(s: string | null): string[] | null {
 export const dynamic = 'force-dynamic'
 
 /** สถานะที่ยังแก้ไขเนื้อหาใบได้ */
-const EDITABLE = ['ร่าง', 'รออนุมัติ']
+const EDITABLE = ['ร่าง']
 
 async function loadFull(id: number) {
   const db = getDb()
@@ -79,31 +79,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   /* ---- transition actions ---- */
   if (typeof b.action === 'string') {
     const a = b.action
-    if (a === 'submit') {
-      if (!(mine || admin)) return NextResponse.json({ error: 'ส่งขออนุมัติได้เฉพาะผู้สร้างใบ' }, { status: 403 })
-      if (cur.status !== 'ร่าง') return NextResponse.json({ error: 'ส่งขออนุมัติได้เฉพาะใบร่าง' }, { status: 400 })
-      await db.update(quotations).set({ status: 'รออนุมัติ', updatedAt: new Date() }).where(eq(quotations.id, id))
-      await db.update(customers).set({ quoteStatus: 'รอตรวจใบเสนอราคา', updatedAt: new Date() }).where(eq(customers.id, cur.customerId))
-      await log('quote-submit', 'สถานะ', cur.status, 'รออนุมัติ')
-      return NextResponse.json({ ok: true })
-    }
-    if (a === 'approve' || a === 'reject') {
-      if (!canApprove(me.role)) return NextResponse.json({ error: 'เฉพาะเจ้าของ/ผู้ดูแลระบบที่อนุมัติได้' }, { status: 403 })
-      if (cur.status !== 'รออนุมัติ') return NextResponse.json({ error: 'ใบนี้ไม่ได้อยู่ในสถานะรออนุมัติ' }, { status: 400 })
-      if (a === 'approve') {
-        await db.update(quotations).set({ status: 'อนุมัติแล้ว', approvedBy: me.id, approvedAt: new Date(), rejectReason: null, updatedAt: new Date() }).where(eq(quotations.id, id))
-        await log('quote-approve', 'สถานะ', cur.status, 'อนุมัติแล้ว')
-      } else {
-        const reason = String(b.reason ?? '').trim()
-        if (!reason) return NextResponse.json({ error: 'ตีกลับต้องระบุเหตุผล' }, { status: 400 })
-        await db.update(quotations).set({ status: 'ร่าง', rejectReason: reason, updatedAt: new Date() }).where(eq(quotations.id, id))
-        await log('quote-reject', 'เหตุผล', undefined, reason)
-      }
-      return NextResponse.json({ ok: true })
-    }
     if (a === 'send') {
-      // flow ปัจจุบันไม่มีขั้นอนุมัติภายใน — ส่งลูกค้าได้ตั้งแต่ใบร่าง (รวมใบเก่าที่ค้างสถานะอนุมัติ)
-      if (!['ร่าง', 'รออนุมัติ', 'อนุมัติแล้ว'].includes(cur.status)) return NextResponse.json({ error: 'ใบนี้ส่งลูกค้าไม่ได้จากสถานะปัจจุบัน' }, { status: 400 })
+      // flow ไม่มีขั้นอนุมัติภายใน — ส่งลูกค้าได้จากใบร่างเลย
+      if (cur.status !== 'ร่าง') return NextResponse.json({ error: 'ใบนี้ส่งลูกค้าไม่ได้จากสถานะปัจจุบัน' }, { status: 400 })
       await db.update(quotations).set({ status: 'ส่งลูกค้าแล้ว', sentAt: today(), updatedAt: new Date() }).where(eq(quotations.id, id))
       await db.update(customers).set({ quoteStatus: 'ส่งใบเสนอราคาแล้ว', updatedAt: new Date() }).where(eq(customers.id, cur.customerId))
       await log('quote-send', 'สถานะ', cur.status, 'ส่งลูกค้าแล้ว')

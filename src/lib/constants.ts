@@ -120,11 +120,9 @@ export const ALL_EXPENSE_CAT_KEYS: string[] = [...new Set([...COST_CAT_KEYS, ...
 export const costCatMeta = (k: string) =>
   COST_CATS.find((c) => c.k === k) ?? OFFICE_CATS.find((c) => c.k === k) ?? COST_CATS[5]
 
-/** สถานะเอกสารใบเสนอราคา + สี */
+/** สถานะเอกสารใบเสนอราคา + สี (flow ไม่มีขั้นอนุมัติภายใน) */
 export const QDOCS = [
   { k: 'ร่าง', c: '#5f6b76', b: '#e9ebee' },
-  { k: 'รออนุมัติ', c: '#b58600', b: '#fbeec0' },
-  { k: 'อนุมัติแล้ว', c: '#2563c9', b: '#d9e8fb' },
   { k: 'ส่งลูกค้าแล้ว', c: '#4338ca', b: '#dfdefa' },
   { k: 'ลูกค้าตกลง', c: '#3f8f3a', b: '#dcedd2' },
   { k: 'ถูกแทนที่', c: '#7a5c4f', b: '#eee4df' },

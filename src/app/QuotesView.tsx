@@ -198,7 +198,7 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToas
 
   const admin = isAdminUp(me.role)
   const mine = quote?.createdBy === me.id
-  const canEditDoc = !!quote && canEdit(me.role) && (mine || admin) && ['ร่าง', 'รออนุมัติ'].includes(quote.status)
+  const canEditDoc = !!quote && canEdit(me.role) && (mine || admin) && quote.status === 'ร่าง'
   const seeCosts = quote?.costs != null
 
   const t = calcTotals(items.map((i) => ({ amount: +i.amount || 0 })), +f.opFeePct || 0, +f.discountDesign || 0, +f.discountBuild || 0, f.vat ? 7 : 0)
@@ -481,15 +481,14 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToas
           <span style={{ flex: 1 }} />
           {quote.status === 'ร่าง' && (mine || admin) && <button className="btn" style={{ color: '#b0281c' }} onClick={del}>ลบร่าง</button>}
           {canEditDoc && <button className="btn" disabled={busy} onClick={() => save()}>{busy ? 'กำลังบันทึก…' : 'บันทึก'}</button>}
-          {['ร่าง', 'รออนุมัติ', 'อนุมัติแล้ว'].includes(quote.status) && <button className="btn btn-primary" disabled={busy} onClick={markSent}>✉ ส่งลูกค้าแล้ว</button>}
+          {quote.status === 'ร่าง' && <button className="btn btn-primary" disabled={busy} onClick={markSent}>✉ ส่งลูกค้าแล้ว</button>}
           {quote.status === 'ส่งลูกค้าแล้ว' && (
             <>
               <button className="btn" disabled={busy} onClick={revise}>แก้ไขเป็นฉบับใหม่</button>
               <button className="btn btn-primary" disabled={busy} onClick={async () => { if (await action('accept')) showToast('บันทึกลูกค้าตกลงแล้ว') }}>✓ ลูกค้าตกลง</button>
             </>
           )}
-          {['อนุมัติแล้ว'].includes(quote.status) && <button className="btn" disabled={busy} onClick={revise}>แก้ไขเป็นฉบับใหม่</button>}
-          {['อนุมัติแล้ว', 'ส่งลูกค้าแล้ว'].includes(quote.status) && (mine || admin) && <button className="btn" style={{ color: '#b0281c' }} disabled={busy} onClick={() => action('cancel', {}, 'ยกเลิกใบเสนอราคานี้?')}>ยกเลิกใบ</button>}
+          {quote.status === 'ส่งลูกค้าแล้ว' && (mine || admin) && <button className="btn" style={{ color: '#b0281c' }} disabled={busy} onClick={() => action('cancel', {}, 'ยกเลิกใบเสนอราคานี้?')}>ยกเลิกใบ</button>}
           {quote.status === 'ลูกค้าตกลง' && !quote.projectId && admin && <button className="btn btn-primary" disabled={busy} onClick={openProject}>🏗 เปิดงานก่อสร้าง</button>}
         </div>
       </div>
