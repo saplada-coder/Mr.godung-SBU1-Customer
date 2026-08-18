@@ -220,7 +220,7 @@ function Sidebar({ me, view, records, apprCount, onNav, onRates, onCoSettings, o
         {item('intake', 'ลูกค้าเข้าใหม่', <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="9" cy="7" r="3.4" /><path d="M2.5 20v-1.6a4 4 0 014-4h5a4 4 0 014 4V20" /><path d="M18 7.5v5M20.5 10h-5" /></svg>)}
         {item('regions', 'ภูมิภาค (BU)', <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 6l6-2 4 2 6-2v14l-6 2-4-2-6 2z" /><path d="M10 4v14M14 6v14" /></svg>)}
         {item('customers', 'รายการลูกค้า', <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 5h18M3 12h18M3 19h18" /></svg>, <span className="badge">{commas(records.length)}</span>)}
-        <div className="nav-lbl">ขาย &amp; ก่อสร้าง</div>
+        <div className="nav-lbl">Budget Control</div>
         {item('quotes', 'ใบเสนอราคา', <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><path d="M14 2v6h6M8 13h8M8 17h5" /></svg>)}
         {item('projects', 'งานก่อสร้าง', <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 21h18M5 21V8l7-5 7 5v13" /><path d="M9 21v-6h6v6M9 11h.01M15 11h.01" /></svg>)}
         {item('office', 'ค่าใช้จ่ายสำนักงาน', <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2M3 12h18" /><path d="M12 12v3" /></svg>)}
