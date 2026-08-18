@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- ไอคอนแท็บเบราว์เซอร์: พื้นแดงแบรนด์ Mr.โกดัง + โกดังสีขาว -->
+  <rect width="64" height="64" rx="14" fill="#c8102e"/>
+  <path d="M10 28 L32 14 L54 28 V52 H10 Z" fill="none" stroke="#fff" stroke-width="4.5" stroke-linejoin="round"/>
+  <path d="M22 52 V38 H42 V52" fill="none" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M22 45 H42" stroke="#fff" stroke-width="3"/>
+</svg>
