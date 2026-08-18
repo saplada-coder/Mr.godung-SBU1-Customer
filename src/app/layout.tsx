@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Noto_Sans_Thai } from 'next/font/google'
 import { ClerkProvider } from '@clerk/nextjs'
 import { thTH } from '@clerk/localizations'
+import PwaInstall from './pwa-install'
 
 /** ทับทุกข้อความที่ดึงชื่อแอปสุ่มของ Clerk (clerk-claret-plank) มาแสดง */
 const APP = 'Mr.โกดัง · SBU1'
@@ -36,13 +37,19 @@ const notoThai = Noto_Sans_Thai({
 export const metadata: Metadata = {
   title: 'Mr.โกดัง · SBU1 - Customer',
   description: 'ระบบจัดการลูกค้าและใบเสนอราคา — Mr.โกดัง SBU1',
+  // PWA: ติดตั้งลงหน้าจอหลักได้ (manifest.ts) + ไอคอนตอนเพิ่มจาก Safari
+  appleWebApp: { capable: true, title: 'Mr.โกดัง', statusBarStyle: 'black-translucent' },
+  icons: { apple: '/apple-touch-icon.png' },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <ClerkProvider localization={localization}>
       <html lang="th" className={`${notoThai.variable} h-full antialiased`}>
-        <body className="min-h-full">{children}</body>
+        <body className="min-h-full">
+          {children}
+          <PwaInstall />
+        </body>
       </html>
     </ClerkProvider>
   )
