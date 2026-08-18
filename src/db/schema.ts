@@ -42,6 +42,7 @@ export const QUOTE_STATUSES = [
   'ยังไม่ทำใบเสนอราคา',
   'ขอข้อมูลเพิ่มเติม',
   'รอทำใบเสนอราคา',
+  'สร้างใบเสนอราคาแล้ว',
   'รอตรวจใบเสนอราคา',
   'ส่งใบเสนอราคาแล้ว',
   'ลูกค้าขอแก้ไขราคา',
@@ -246,6 +247,13 @@ export const quotations = pgTable(
     validUntil: date('valid_until'),
     acceptedAt: date('accepted_at'),
     refNo: varchar('ref_no', { length: 60 }),
+    /** ข้อมูลลูกค้าบนหัวใบ — คัดลอกจาก CRM ตอนสร้าง แก้เฉพาะใบได้ (ที่อยู่เต็ม/เลขภาษี CRM ไม่มีเก็บ) */
+    custName: varchar('cust_name', { length: 160 }),
+    custAddress: text('cust_address'),
+    custPhone: varchar('cust_phone', { length: 40 }),
+    custTaxId: varchar('cust_tax_id', { length: 20 }),
+    /** รูปผลงานแนบท้ายที่เลือกเฉพาะใบนี้ (JSON array data URL) — null = ใช้คลังจากตั้งค่าบริษัท */
+    portfolioJson: text('portfolio_json'),
     opFeePct: numeric('op_fee_pct', { precision: 5, scale: 2 }),
     discountDesign: numeric('discount_design', { precision: 14, scale: 2 }),
     discountBuild: numeric('discount_build', { precision: 14, scale: 2 }),

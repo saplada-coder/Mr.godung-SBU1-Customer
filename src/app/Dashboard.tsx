@@ -74,8 +74,9 @@ export default function Dashboard({ me }: { me: Me }) {
   const [coSettingsOpen, setCoSettingsOpen] = useState(false)
   const [sigOpen, setSigOpen] = useState(false)
   const [apprCount, setApprCount] = useState(0)
-  // เปิดงานก่อสร้างข้ามหน้า (จากใบเสนอราคา/กล่องอนุมัติ) — ส่ง id ให้ ProjectsView เปิดโมดัลต่อ
+  // เปิดงานก่อสร้าง/ใบเสนอราคาข้ามหน้า — ส่ง id ให้ view ปลายทางเปิดโมดัลต่อ
   const [gotoProjectId, setGotoProjectId] = useState<number | null>(null)
+  const [gotoQuoteId, setGotoQuoteId] = useState<number | null>(null)
   const toastT = useRef<ReturnType<typeof setTimeout> | null>(null)
   const editable = canEdit(me.role)
 
@@ -123,6 +124,17 @@ export default function Dashboard({ me }: { me: Me }) {
   const bizChanged = useCallback(() => { loadApprCount(); load() }, [loadApprCount, load])
   const openProject = useCallback((pid: number) => { setGotoProjectId(pid); setView('projects'); window.scrollTo(0, 0) }, [])
 
+  // สร้างใบเสนอราคาจากหน้ารายการลูกค้า → เด้งไปหน้าใบเสนอราคาพร้อมเปิดฟอร์มใบใหม่
+  const createQuoteFor = useCallback(async (rec: Rec) => {
+    const r = await fetch('/api/quotes', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ customerId: rec.id }) })
+    const j = await r.json()
+    if (r.ok) {
+      showToast('สร้างใบเสนอราคา ' + j.code + ' แล้ว')
+      setManage(null); setGotoQuoteId(j.id); setView('quotes'); window.scrollTo(0, 0)
+      load(); loadApprCount()
+    } else showToast(j.error || 'สร้างใบเสนอราคาไม่สำเร็จ')
+  }, [load, loadApprCount, showToast])
+
   const rateOf = useCallback((bu: string) => rates[bu] ?? DEFAULT_RATES[bu as keyof typeof DEFAULT_RATES] ?? 5500, [rates])
 
   if (loading || !meta) {
@@ -160,19 +172,19 @@ export default function Dashboard({ me }: { me: Me }) {
           {view === 'alerts' && <Alerts records={records} onManage={setManage} />}
           {view === 'intake' && <Intake records={records} />}
           {view === 'regions' && <Regions records={records} />}
-          {view === 'quotes' && <QuotesView me={me} records={records} limitedData={range === '3m'} showToast={showToast} onChanged={bizChanged} onOpenProject={openProject} />}
+          {view === 'quotes' && <QuotesView me={me} records={records} limitedData={range === '3m'} openQuoteId={gotoQuoteId} onOpenedQuote={() => setGotoQuoteId(null)} showToast={showToast} onChanged={bizChanged} onOpenProject={openProject} />}
           {view === 'projects' && <ProjectsView me={me} records={records} limitedData={range === '3m'} showToast={showToast} onChanged={bizChanged} openProjectId={gotoProjectId} onOpenedProject={() => setGotoProjectId(null)} />}
           {view === 'office' && <OfficeExpensesView me={me} showToast={showToast} onChanged={bizChanged} />}
           {view === 'approvals' && <ApprovalsView me={me} showToast={showToast} onChanged={bizChanged} onOpenProject={openProject} />}
           {view === 'users' && canManageUsers(me.role) && <UsersView me={me} showToast={showToast} />}
           {view === 'customers' && (
-            <Customers records={records} editable={editable} onManage={setManage} onAdd={() => setAddOpen(true)}
+            <Customers records={records} editable={editable} onManage={setManage} onAdd={() => setAddOpen(true)} onCreateQuote={createQuoteFor}
               patch={async (id, body) => { const r = await fetch(`/api/customers/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); if (r.ok) { showToast('อัปเดตแล้ว'); load() } else showToast((await r.json()).error || 'ผิดพลาด') }} />
           )}
         </div>
       </div>
 
-      {manage && <ManageModal rec={manage} me={me} rateOf={rateOf} onClose={() => setManage(null)} onSaved={() => { setManage(null); load() }} showToast={showToast} />}
+      {manage && <ManageModal rec={manage} me={me} rateOf={rateOf} onClose={() => setManage(null)} onSaved={() => { setManage(null); load() }} showToast={showToast} onCreateQuote={editable ? () => createQuoteFor(manage) : undefined} />}
       {addOpen && <AddModal records={records} rateOf={rateOf} onClose={() => setAddOpen(false)} onSaved={() => { setAddOpen(false); load() }} showToast={showToast} />}
       {ratesOpen && <RatesModal rates={rates} onClose={() => setRatesOpen(false)} onSaved={(r) => { setRates(r); setRatesOpen(false); load() }} showToast={showToast} />}
       {coSettingsOpen && <CompanySettingsModal onClose={() => setCoSettingsOpen(false)} showToast={showToast} />}
@@ -524,8 +536,9 @@ function Regions({ records }: { records: Rec[] }) {
 
 /* ---------------- Customers table ---------------- */
 type SortKey = 'code' | 'name' | 'detail' | 'sqm' | 'status' | 'quote' | 'apptDate' | 'd' | 'amount'
-function Customers({ records, editable, onManage, onAdd, patch }: {
+function Customers({ records, editable, onManage, onAdd, onCreateQuote, patch }: {
   records: Rec[]; editable: boolean; onManage: (r: Rec) => void; onAdd: () => void
+  onCreateQuote: (r: Rec) => void
   patch: (id: number, body: Record<string, unknown>) => Promise<void>
 }) {
   const [q, setQ] = useState(''); const [fReg, setFReg] = useState(''); const [fStat, setFStat] = useState(''); const [fQuote, setFQuote] = useState(''); const [fMonth, setFMonth] = useState(''); const [fChan, setFChan] = useState('')
@@ -631,7 +644,10 @@ function Customers({ records, editable, onManage, onAdd, patch }: {
                   <td>{apptCell(r)}</td>
                   <td style={{ color: 'var(--text-dim)', fontSize: 12, whiteSpace: 'nowrap' }}>{r.d ? thDate(r.d) : '—'}</td>
                   <td className={'amt' + (v ? '' : ' zero')}>{v ? '฿' + commas(v) : '—'}{v ? <span className={'vtag' + (r.isFinal ? ' real' : '')}>{r.isFinal ? 'มูลค่าจริง' : 'ประมาณ'}</span> : null}</td>
-                  <td className="act">{editable ? <button className="row-btn" onClick={() => onManage(r)}>จัดการ</button> : null}</td>
+                  <td className="act" style={{ whiteSpace: 'nowrap' }}>
+                    {editable && <button className="row-btn" onClick={() => onManage(r)}>จัดการ</button>}
+                    {editable && <button className="row-btn" style={{ marginLeft: 5, color: 'var(--accent)' }} title="สร้างใบเสนอราคาให้ลูกค้ารายนี้" onClick={() => { if (window.confirm(`สร้างใบเสนอราคาให้ "${r.name || r.chname || r.code}"?`)) onCreateQuote(r) }}>+ใบเสนอ</button>}
+                  </td>
                 </tr>
               )
             })}
@@ -902,8 +918,9 @@ function histLine(h: HistoryItem): string {
   if (h.kind === 'status' || h.kind === 'quote' || (h.kind === 'edit' && h.oldValue)) return `${f}: ${h.oldValue || '(ว่าง)'} → ${h.newValue || '(ว่าง)'}`
   return `${f}: ${h.newValue || ''}`
 }
-function ManageModal({ rec, me, rateOf, onClose, onSaved, showToast }: {
+function ManageModal({ rec, me, rateOf, onClose, onSaved, showToast, onCreateQuote }: {
   rec: Rec; me: Me; rateOf: (bu: string) => number; onClose: () => void; onSaved: () => void; showToast: (m: string) => void
+  onCreateQuote?: () => void
 }) {
   const [status, setStatus] = useState(rec.status)
   const [quote, setQuote] = useState(rec.quote)
@@ -1005,7 +1022,10 @@ function ManageModal({ rec, me, rateOf, onClose, onSaved, showToast }: {
                 ))}</div>}
           </div>
         </div>
-        <div className="modal-f"><button className="btn" onClick={onClose}>ปิด</button><button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? 'กำลังบันทึก…' : 'บันทึก'}</button></div>
+        <div className="modal-f">
+          {onCreateQuote && <button className="btn" style={{ marginRight: 'auto', color: 'var(--accent)' }} onClick={() => { if (window.confirm('สร้างใบเสนอราคาให้ลูกค้ารายนี้?')) onCreateQuote() }}>🧾 สร้างใบเสนอราคา</button>}
+          <button className="btn" onClick={onClose}>ปิด</button><button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? 'กำลังบันทึก…' : 'บันทึก'}</button>
+        </div>
       </div>
     </div>
   )

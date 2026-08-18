@@ -71,6 +71,7 @@ export function serializeQuote(
   return {
     id: q.id, customerId: q.customerId, code: q.code, rev: q.rev, status: q.status,
     issueDate: q.issueDate, validUntil: q.validUntil, acceptedAt: q.acceptedAt, refNo: q.refNo,
+    custName: q.custName, custAddress: q.custAddress, custPhone: q.custPhone, custTaxId: q.custTaxId,
     opFeePct: num(q.opFeePct), discountDesign: num(q.discountDesign), discountBuild: num(q.discountBuild), vatPct: num(q.vatPct),
     permitDays: q.permitDays, buildDays: q.buildDays,
     exclusions: q.exclusions, warranty: q.warranty, spec: q.spec, note: q.note,

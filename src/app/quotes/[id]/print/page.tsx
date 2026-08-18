@@ -34,17 +34,24 @@ export default async function QuotePrintPage({ params }: { params: Promise<{ id:
   ])
   const creator = q.createdBy ? (await db.select().from(users).where(eq(users.id, q.createdBy)).limit(1))[0] : null
   const t = quoteTotals(q, items, [])
+  // รูปผลงานท้ายใบ: ที่เลือกไว้เฉพาะใบนี้ก่อน — ยังไม่เคยเลือกใช้คลังจากตั้งค่า
+  let printImages: string[] = q.includePortfolio ? settings.portfolio : []
+  if (q.portfolioJson != null) {
+    try { const v = JSON.parse(q.portfolioJson); if (Array.isArray(v)) printImages = v.filter((x) => typeof x === 'string') } catch { /* ใช้ค่า fallback */ }
+  }
   const sortedItems = [...items].sort((a, b) => a.seq - b.seq)
   const sortedInsts = [...insts].sort((a, b) => a.seq - b.seq)
   const vatPct = q.vatPct != null ? Number(q.vatPct) : 0
 
+  // ใช้ข้อมูลลูกค้าที่แก้ไว้บนใบก่อน — ไม่มีค่อยถอยไปใช้ข้อมูลจาก CRM
+  const cName = q.custName || cust?.name || cust?.chname || ''
   const infoL: [string, string][] = [
     ['รหัสลูกค้า', cust?.code || ''],
-    ['ชื่อลูกค้า', cust?.name || cust?.chname || ''],
-    ['ที่อยู่', cust?.province || ''],
-    ['เบอร์โทรติดต่อ', fmtPhone(cust?.phone ?? null)],
-    ['เลขประจำตัวผู้เสียภาษี', ''],
-    ['ผู้ติดต่อ', cust?.name || cust?.chname || ''],
+    ['ชื่อลูกค้า', cName],
+    ['ที่อยู่', q.custAddress || cust?.province || ''],
+    ['เบอร์โทรติดต่อ', q.custPhone ? fmtPhone(q.custPhone) : fmtPhone(cust?.phone ?? null)],
+    ['เลขประจำตัวผู้เสียภาษี', q.custTaxId || ''],
+    ['ผู้ติดต่อ', cName],
   ]
   const infoR: [string, string][] = [
     ['เลขที่เอกสาร', q.code + (q.rev > 1 ? ` (Rev.${q.rev})` : '')],
@@ -206,9 +213,9 @@ export default async function QuotePrintPage({ params }: { params: Promise<{ id:
       )}
 
       {/* ---------- หน้า 3+: รูปผลงาน ---------- */}
-      {q.includePortfolio && settings.portfolio.length > 0 && (
+      {printImages.length > 0 && (
         <div className="page">
-          {settings.portfolio.map((src, i) => (
+          {printImages.map((src, i) => (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img className="pf" key={i} src={src} alt="" />
           ))}

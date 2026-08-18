@@ -64,6 +64,8 @@ export async function POST(req: Request) {
 
   const [created] = await db.insert(quotations).values({
     customerId, code, issueDate: issue, validUntil,
+    // ข้อมูลลูกค้าบนหัวใบ — คัดลอกจาก CRM มาตั้งต้น แก้เฉพาะใบได้ในฟอร์ม
+    custName: cust.name || cust.chname, custAddress: cust.province, custPhone: cust.phone,
     opFeePct: String(settings.opFeePct),
     vatPct: '0',
     permitDays: settings.permitDays, buildDays: settings.buildDays,
@@ -91,9 +93,9 @@ export async function POST(req: Request) {
     })))
   }
 
-  // sync สถานะใบเสนอราคาฝั่ง CRM
-  if (cust.quoteStatus === 'ยังไม่ทำใบเสนอราคา' || cust.quoteStatus === 'รอทำใบเสนอราคา' || cust.quoteStatus === 'ขอข้อมูลเพิ่มเติม') {
-    await db.update(customers).set({ quoteStatus: 'รอตรวจใบเสนอราคา', updatedAt: new Date() }).where(eq(customers.id, customerId))
+  // sync สถานะใบเสนอราคาฝั่ง CRM → "สร้างใบเสนอราคาแล้ว"
+  if (['ยังไม่ทำใบเสนอราคา', 'ขอข้อมูลเพิ่มเติม', 'รอทำใบเสนอราคา'].includes(cust.quoteStatus)) {
+    await db.update(customers).set({ quoteStatus: 'สร้างใบเสนอราคาแล้ว', updatedAt: new Date() }).where(eq(customers.id, customerId))
   }
   await db.insert(activityLog).values({ customerId, quotationId: created.id, userId: me.id, action: 'quote-create', newValue: code })
 

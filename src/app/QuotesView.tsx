@@ -12,8 +12,9 @@ type Me = { id: number; email: string; name: string | null; image: string | null
 type Cust = { id: number; code: string; bu: string; name: string | null; chname: string | null; phone: string | null; province: string | null; sqm: number | null; d: string | null }
 
 /* ================= รายการใบเสนอราคา ================= */
-export default function QuotesView({ me, records, limitedData, showToast, onChanged, onOpenProject }: {
+export default function QuotesView({ me, records, limitedData, openQuoteId, onOpenedQuote, showToast, onChanged, onOpenProject }: {
   me: Me; records: Cust[]; limitedData?: boolean
+  openQuoteId?: number | null; onOpenedQuote?: () => void
   showToast: (m: string) => void; onChanged: () => void; onOpenProject: (projectId: number) => void
 }) {
   const [quotes, setQuotes] = useState<Quote[] | null>(null)
@@ -28,6 +29,8 @@ export default function QuotesView({ me, records, limitedData, showToast, onChan
     else showToast('โหลดใบเสนอราคาไม่สำเร็จ')
   }, [showToast])
   useEffect(() => { load() }, [load])
+  // เปิดใบที่ส่งต่อมาจากหน้าอื่น (เช่น กดสร้างจากรายชื่อลูกค้า)
+  useEffect(() => { if (openQuoteId != null) { setOpenId(openQuoteId); onOpenedQuote?.() } }, [openQuoteId, onOpenedQuote])
 
   const list = useMemo(() => {
     if (!quotes) return []
@@ -147,6 +150,10 @@ function CustomerPicker({ records, limitedData, onClose, onPick }: { records: Cu
 type ItemRow = { description: string; qty: string; unit: string; unitPrice: string; amount: string; note: string }
 type InstRowE = { title: string; detail: string; percent: string; amount: string; note: string }
 
+/* ช่องจำนวนเงินแบบมี , คั่นหลักพัน (เก็บค่าจริงเป็นเลขล้วน) */
+const stripC = (s: string) => s.replace(/[^\d]/g, '')
+const fmtC = (s: string) => (s ? Number(s).toLocaleString('en-US') : '')
+
 export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToast }: {
   id: number; me: Me; onClose: () => void; onChanged: () => void
   onOpenProject: (projectId: number) => void; showToast: (m: string) => void
@@ -155,10 +162,14 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToas
   const [history, setHistory] = useState<HistItem[]>([])
   const [busy, setBusy] = useState(false)
   // ฟิลด์แก้ไข (string ทั้งหมด เพื่อพิมพ์ได้ลื่น)
-  const [f, setF] = useState({ issueDate: '', validUntil: '', refNo: '', opFeePct: '', discountDesign: '', discountBuild: '', vat: false, permitDays: '', buildDays: '', exclusions: '', warranty: '', spec: '', note: '', includePortfolio: true })
+  const [f, setF] = useState({ issueDate: '', validUntil: '', refNo: '', custName: '', custAddress: '', custPhone: '', custTaxId: '', opFeePct: '', discountDesign: '', discountBuild: '', vat: false, permitDays: '', buildDays: '', exclusions: '', warranty: '', spec: '', note: '' })
   const [items, setItems] = useState<ItemRow[]>([])
   const [insts, setInsts] = useState<InstRowE[]>([])
   const [costs, setCosts] = useState<Record<string, string>>({})
+  const [costsOpen, setCostsOpen] = useState(false)
+  // รูปผลงานแนบท้าย: images = ที่เลือกไว้ของใบนี้ · library = คลังจากตั้งค่าบริษัท
+  const [images, setImages] = useState<string[]>([])
+  const [library, setLibrary] = useState<string[]>([])
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/quotes/${id}`, { cache: 'no-store' })
@@ -168,15 +179,20 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToas
     setQuote(qt); setHistory(j.history || [])
     setF({
       issueDate: qt.issueDate || '', validUntil: qt.validUntil || '', refNo: qt.refNo || '',
+      custName: qt.custName || '', custAddress: qt.custAddress || '', custPhone: qt.custPhone || '', custTaxId: qt.custTaxId || '',
       opFeePct: qt.opFeePct != null ? String(qt.opFeePct) : '', discountDesign: qt.discountDesign != null ? String(qt.discountDesign) : '',
       discountBuild: qt.discountBuild != null ? String(qt.discountBuild) : '', vat: (qt.vatPct || 0) > 0,
       permitDays: qt.permitDays != null ? String(qt.permitDays) : '', buildDays: qt.buildDays != null ? String(qt.buildDays) : '',
       exclusions: qt.exclusions || '', warranty: qt.warranty || '', spec: qt.spec || '', note: qt.note || '',
-      includePortfolio: qt.includePortfolio,
     })
-    setItems(qt.items.map((i) => ({ description: i.description, qty: i.qty != null ? String(i.qty) : '', unit: i.unit || '', unitPrice: i.unitPrice != null ? String(i.unitPrice) : '', amount: String(i.amount), note: i.note || '' })))
-    setInsts(qt.installments.map((i) => ({ title: i.title, detail: i.detail || '', percent: i.percent != null ? String(i.percent) : '', amount: String(i.amount), note: i.note || '' })))
+    setItems(qt.items.map((i) => ({ description: i.description, qty: i.qty != null ? String(i.qty) : '', unit: i.unit || '', unitPrice: i.unitPrice != null ? String(i.unitPrice) : '', amount: String(Math.round(i.amount)), note: i.note || '' })))
+    setInsts(qt.installments.map((i) => ({ title: i.title, detail: i.detail || '', percent: i.percent != null ? String(i.percent) : '', amount: String(Math.round(i.amount)), note: i.note || '' })))
     setCosts(Object.fromEntries((qt.costs || []).map((c) => [c.category, String(c.amount)])))
+    // พับส่วนต้นทุนไว้ถ้ายังไม่เคยกรอก
+    setCostsOpen((qt.costs || []).some((c) => c.amount > 0))
+    setLibrary(j.portfolioLibrary || [])
+    // ยังไม่เคยเลือกรูปสำหรับใบนี้ → ค่าเริ่มต้นตามคลัง (พฤติกรรมเดิม)
+    setImages(j.portfolio ?? (qt.includePortfolio ? j.portfolioLibrary || [] : []))
   }, [id, onClose, showToast])
   useEffect(() => { load() }, [load])
 
@@ -207,10 +223,11 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToas
     setBusy(true)
     const body = {
       issueDate: f.issueDate, validUntil: f.validUntil || null, refNo: f.refNo,
+      custName: f.custName, custAddress: f.custAddress, custPhone: f.custPhone, custTaxId: f.custTaxId,
       opFeePct: f.opFeePct === '' ? null : +f.opFeePct, discountDesign: f.discountDesign === '' ? null : +f.discountDesign,
       discountBuild: f.discountBuild === '' ? null : +f.discountBuild, vatPct: f.vat ? 7 : 0,
       permitDays: f.permitDays === '' ? null : +f.permitDays, buildDays: f.buildDays === '' ? null : +f.buildDays,
-      exclusions: f.exclusions, warranty: f.warranty, spec: f.spec, note: f.note, includePortfolio: f.includePortfolio,
+      exclusions: f.exclusions, warranty: f.warranty, spec: f.spec, note: f.note, portfolio: images,
       items: items.map((i) => ({ description: i.description, qty: i.qty === '' ? null : +i.qty, unit: i.unit, unitPrice: i.unitPrice === '' ? null : +i.unitPrice, amount: +i.amount || 0, note: i.note })),
       installments: insts.map((i) => ({ title: i.title, detail: i.detail, percent: i.percent === '' ? null : +i.percent, amount: +i.amount || 0, note: i.note })),
       ...(seeCosts ? { costs: COST_CATS.map((c) => ({ category: c.k, amount: +costs[c.k] || 0 })) } : {}),
@@ -280,6 +297,14 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToas
             <div className="field full"><div className="okbox">ใบนี้เปิดงานก่อสร้างแล้ว <button type="button" className="btn btn-sm" onClick={() => { onClose(); onOpenProject(quote.projectId!) }}>เปิดดูงาน →</button></div></div>
           )}
 
+          {/* ---- ข้อมูลลูกค้าบนหัวใบ ---- */}
+          <div className="fs" style={{ borderTop: 'none', paddingTop: 0 }}><div className="fs-t">ข้อมูลลูกค้าบนใบ</div><div className="hintline">คัดลอกมาจาก CRM ตอนสร้างใบ — แก้ตรงนี้มีผลเฉพาะใบนี้ ไม่กระทบข้อมูลลูกค้าในระบบ</div></div>
+          <div className="field"><label>ชื่อลูกค้า</label><input value={f.custName} disabled={!canEditDoc} onChange={(e) => setF((o) => ({ ...o, custName: e.target.value }))} /></div>
+          <div className="field"><label>เบอร์โทรติดต่อ</label><input value={f.custPhone} disabled={!canEditDoc} onChange={(e) => setF((o) => ({ ...o, custPhone: e.target.value }))} inputMode="numeric" /></div>
+          <div className="field full"><label>ที่อยู่</label><input value={f.custAddress} disabled={!canEditDoc} onChange={(e) => setF((o) => ({ ...o, custAddress: e.target.value }))} placeholder="ที่อยู่เต็มสำหรับขึ้นหัวใบ" /></div>
+          <div className="field"><label>เลขประจำตัวผู้เสียภาษี</label><input value={f.custTaxId} disabled={!canEditDoc} onChange={(e) => setF((o) => ({ ...o, custTaxId: e.target.value }))} inputMode="numeric" maxLength={20} /></div>
+
+          <div className="fs"><div className="fs-t">เอกสาร</div></div>
           <div className="field"><label>วันที่ออกเอกสาร</label><input type="date" value={f.issueDate} disabled={!canEditDoc} onChange={(e) => setF((o) => ({ ...o, issueDate: e.target.value }))} /></div>
           <div className="field"><label>ใช้ได้ถึงวันที่ (ยืนราคา)</label><input type="date" value={f.validUntil} disabled={!canEditDoc} onChange={(e) => setF((o) => ({ ...o, validUntil: e.target.value }))} /></div>
           <div className="field"><label>เลขที่อ้างอิง</label><input value={f.refNo} disabled={!canEditDoc} onChange={(e) => setF((o) => ({ ...o, refNo: e.target.value }))} /></div>
@@ -302,7 +327,7 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToas
                   <input type="number" value={it.qty} disabled={!canEditDoc} onChange={(e) => setItem(i, 'qty', e.target.value)} />
                   <input value={it.unit} disabled={!canEditDoc} onChange={(e) => setItem(i, 'unit', e.target.value)} placeholder="ตร.ม." />
                   <input type="number" value={it.unitPrice} disabled={!canEditDoc} onChange={(e) => setItem(i, 'unitPrice', e.target.value)} />
-                  <input type="number" value={it.amount} disabled={!canEditDoc} onChange={(e) => setItem(i, 'amount', e.target.value)} />
+                  <input inputMode="numeric" value={fmtC(it.amount)} disabled={!canEditDoc} onChange={(e) => setItem(i, 'amount', stripC(e.target.value))} />
                   <input value={it.note} disabled={!canEditDoc} onChange={(e) => setItem(i, 'note', e.target.value)} />
                   {canEditDoc ? <button type="button" className="qi-x" onClick={() => setItems((o) => o.filter((_, x) => x !== i))}>×</button> : <span />}
                 </div>
@@ -335,19 +360,27 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToas
             </div>
           </div>
 
-          {/* ---- ต้นทุนประมาณการ (ภายใน) ---- */}
+          {/* ---- ต้นทุนประมาณการ (ภายใน) — พับย่อได้ ไม่บังคับกรอก ---- */}
           {seeCosts && (
             <>
-              <div className="fs"><div className="fs-t">ประมาณการต้นทุน (ภายใน — ไม่ขึ้นหน้าพิมพ์)</div><div className="hintline">เมื่อเปิดงานก่อสร้าง 6 หมวดนี้จะกลายเป็นงบประมาณตั้งต้นของงานทันที</div></div>
-              {COST_CATS.map((c) => (
-                <div className="field" key={c.k}><label>{c.label}</label><input type="number" value={costs[c.k] || ''} disabled={!canEditDoc} onChange={(e) => setCosts((o) => ({ ...o, [c.k]: e.target.value }))} /></div>
-              ))}
-              <div className="field full">
-                <div className="sumbox">
-                  <div><span>ต้นทุนรวม</span><b>฿{commas(costTotal)}</b></div>
-                  <div className="grand"><span>กำไรคาดการณ์</span><b style={{ color: t.total - costTotal >= 0 ? '#3f8f3a' : 'var(--accent)' }}>฿{commas(t.total - costTotal)} ({t.total > 0 ? ((t.total - costTotal) / t.total * 100).toFixed(1) : 0}%)</b></div>
-                </div>
+              <div className="fs">
+                <button type="button" className="fs-toggle" onClick={() => setCostsOpen((v) => !v)}>
+                  <span className="fs-t" style={{ marginBottom: 0 }}>{costsOpen ? '▾' : '▸'} ประมาณการต้นทุน (ภายใน — ไม่ขึ้นหน้าพิมพ์)</span>
+                  {!costsOpen && <span className="hintline" style={{ marginLeft: 8 }}>{costTotal > 0 ? `รวม ฿${commas(costTotal)} · กำไรคาด ฿${commas(t.total - costTotal)}` : 'ยังไม่กรอก (ไม่บังคับ) — กดเพื่อเปิด'}</span>}
+                </button>
+                {costsOpen && <div className="hintline">เมื่อเปิดงานก่อสร้าง 6 หมวดนี้จะกลายเป็นงบประมาณตั้งต้นของงานทันที</div>}
               </div>
+              {costsOpen && COST_CATS.map((c) => (
+                <div className="field" key={c.k}><label>{c.label}</label><input inputMode="numeric" value={fmtC(costs[c.k] || '')} disabled={!canEditDoc} onChange={(e) => setCosts((o) => ({ ...o, [c.k]: stripC(e.target.value) }))} /></div>
+              ))}
+              {costsOpen && (
+                <div className="field full">
+                  <div className="sumbox">
+                    <div><span>ต้นทุนรวม</span><b>฿{commas(costTotal)}</b></div>
+                    <div className="grand"><span>กำไรคาดการณ์</span><b style={{ color: t.total - costTotal >= 0 ? '#3f8f3a' : 'var(--accent)' }}>฿{commas(t.total - costTotal)} ({t.total > 0 ? ((t.total - costTotal) / t.total * 100).toFixed(1) : 0}%)</b></div>
+                  </div>
+                </div>
+              )}
             </>
           )}
 
@@ -371,7 +404,7 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToas
                     <input className="qin-title" value={it.title} disabled={!canEditDoc} onChange={(e) => setInst(i, 'title', e.target.value)} placeholder={`งวดที่ ${i + 1}`} />
                     <input className="qin-pct" type="number" value={it.percent} disabled={!canEditDoc} onChange={(e) => setInst(i, 'percent', e.target.value)} placeholder="%" />
                     <span className="qin-pcts">%</span>
-                    <input className="qin-amt" type="number" value={it.amount} disabled={!canEditDoc} onChange={(e) => setInst(i, 'amount', e.target.value)} placeholder="บาท" />
+                    <input className="qin-amt" inputMode="numeric" value={fmtC(it.amount)} disabled={!canEditDoc} onChange={(e) => setInst(i, 'amount', stripC(e.target.value))} placeholder="บาท" />
                     {canEditDoc ? <button type="button" className="qi-x" onClick={() => setInsts((o) => o.filter((_, x) => x !== i))}>×</button> : <span />}
                   </div>
                   <textarea value={it.detail} disabled={!canEditDoc} onChange={(e) => setInst(i, 'detail', e.target.value)} placeholder="รายละเอียดงานของงวดนี้…" rows={2} />
@@ -388,11 +421,38 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToas
           <div className="field full"><label>การรับประกันคุณภาพ</label><textarea value={f.warranty} disabled={!canEditDoc} onChange={(e) => setF((o) => ({ ...o, warranty: e.target.value }))} rows={3} /></div>
           <div className="field full"><label>รายละเอียดสเปค (SPEC)</label><textarea value={f.spec} disabled={!canEditDoc} onChange={(e) => setF((o) => ({ ...o, spec: e.target.value }))} rows={5} /></div>
           <div className="field full"><label>หมายเหตุท้ายใบ</label><textarea value={f.note} disabled={!canEditDoc} onChange={(e) => setF((o) => ({ ...o, note: e.target.value }))} rows={2} /></div>
+
+          {/* ---- รูปผลงานแนบท้ายใบ (เลือกรายใบ) ---- */}
+          <div className="fs"><div className="fs-t">รูปผลงานแนบท้ายใบ ({images.length})</div><div className="hintline">คลิกรูปจากคลังเพื่อเลือก/เอาออก หรืออัปโหลดรูปเฉพาะใบนี้ — ไม่เลือกเลย = ไม่แนบ</div></div>
           <div className="field full">
-            <label style={{ display: 'inline-flex', gap: 7, alignItems: 'center', cursor: canEditDoc ? 'pointer' : 'default' }}>
-              <input type="checkbox" checked={f.includePortfolio} disabled={!canEditDoc} onChange={(e) => setF((o) => ({ ...o, includePortfolio: e.target.checked }))} />
-              แนบรูปผลงานท้ายใบ (จัดการรูปในตั้งค่าบริษัท)
-            </label>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {library.map((src, i) => {
+                const on = images.includes(src)
+                return (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img key={'lib' + i} src={src} alt="" title={on ? 'คลิกเพื่อเอาออก' : 'คลิกเพื่อแนบ'}
+                    onClick={() => { if (canEditDoc) setImages((o) => (on ? o.filter((x) => x !== src) : [...o, src])) }}
+                    style={{ width: 104, height: 76, objectFit: 'cover', borderRadius: 9, cursor: canEditDoc ? 'pointer' : 'default', border: on ? '3px solid var(--accent)' : '1px solid var(--border)', opacity: on ? 1 : 0.45 }} />
+                )
+              })}
+              {images.filter((src) => !library.includes(src)).map((src, i) => (
+                <div key={'own' + i} style={{ position: 'relative' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={src} alt="" style={{ width: 104, height: 76, objectFit: 'cover', borderRadius: 9, border: '3px solid var(--accent)' }} />
+                  {canEditDoc && <button type="button" className="qi-x" style={{ position: 'absolute', top: 2, right: 2, background: 'rgba(0,0,0,.55)', color: '#fff', borderRadius: 6 }} onClick={() => setImages((o) => o.filter((x) => x !== src))}>×</button>}
+                </div>
+              ))}
+              {canEditDoc && images.length < 8 && (
+                <button type="button" className="btn" style={{ width: 104, height: 76, justifyContent: 'center' }}
+                  onClick={() => pickImage((u) => setImages((o) => [...o, u]), showToast)}>+ อัปโหลด</button>
+              )}
+            </div>
+            {!library.length && <div className="hintline">คลังรูปกลางยังว่าง — เพิ่มรูปที่ใช้บ่อยได้ที่ &quot;ตั้งค่าบริษัท / ใบเสนอราคา&quot; (เมนูซ้ายล่าง) หรืออัปโหลดเฉพาะใบนี้ได้เลย</div>}
+          </div>
+
+          {/* ---- ลายเซ็น ---- */}
+          <div className="field full">
+            <div className="hintline">✍️ ลายเซ็นผู้เสนอราคาจะแปะอัตโนมัติที่ท้ายใบตอนพิมพ์ (ช่อง &quot;ผู้เสนอราคา&quot; มุมขวาล่าง) — เป็นลายเซ็นของ<b>ผู้สร้างใบ</b> ตั้ง/เปลี่ยนได้ที่เมนูซ้ายล่าง &quot;ลายเซ็นของฉัน&quot;</div>
           </div>
 
           {/* ---- ประวัติ ---- */}

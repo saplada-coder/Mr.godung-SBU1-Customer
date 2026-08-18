@@ -8,6 +8,7 @@ export type QuoteCost = { category: string; amount: number }
 export type Quote = {
   id: number; customerId: number; code: string; rev: number; status: string
   issueDate: string; validUntil: string | null; acceptedAt: string | null; refNo: string | null
+  custName: string | null; custAddress: string | null; custPhone: string | null; custTaxId: string | null
   opFeePct: number | null; discountDesign: number | null; discountBuild: number | null; vatPct: number | null
   permitDays: number | null; buildDays: number | null
   exclusions: string | null; warranty: string | null; spec: string | null; note: string | null

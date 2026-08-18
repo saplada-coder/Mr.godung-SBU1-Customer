@@ -3,8 +3,14 @@ import { desc, eq } from 'drizzle-orm'
 import { getDb } from '@/db'
 import { quotations, quotationItems, quotationCosts, quotationInstallments, customers, users, activityLog } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
+import { getSettings } from '@/lib/settings'
 import { serializeQuote, num, nstr, today } from '@/lib/biz'
 import { canEdit, isAdminUp, canApprove, COST_CAT_KEYS } from '@/lib/constants'
+
+function parseImgs(s: string | null): string[] | null {
+  if (s == null) return null
+  try { const v = JSON.parse(s); return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : null } catch { return null }
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -34,10 +40,12 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const { q, items, costs, insts, cust } = full
 
   const withCosts = isAdminUp(me.role) || q.createdBy === me.id
-  const acts = await db
-    .select({ action: activityLog.action, field: activityLog.field, oldValue: activityLog.oldValue, newValue: activityLog.newValue, at: activityLog.createdAt, who: users.name, email: users.email })
-    .from(activityLog).leftJoin(users, eq(activityLog.userId, users.id))
-    .where(eq(activityLog.quotationId, id)).orderBy(desc(activityLog.createdAt)).limit(100)
+  const [acts, settings] = await Promise.all([
+    db.select({ action: activityLog.action, field: activityLog.field, oldValue: activityLog.oldValue, newValue: activityLog.newValue, at: activityLog.createdAt, who: users.name, email: users.email })
+      .from(activityLog).leftJoin(users, eq(activityLog.userId, users.id))
+      .where(eq(activityLog.quotationId, id)).orderBy(desc(activityLog.createdAt)).limit(100),
+    getSettings(),
+  ])
 
   const quote = serializeQuote(
     q, items.sort((a, b) => a.seq - b.seq), costs, insts.sort((a, b) => a.seq - b.seq),
@@ -45,6 +53,9 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   )
   return NextResponse.json({
     quote,
+    // รูปที่เลือกไว้ของใบนี้ (null = ยังไม่เคยเลือก → ค่าเริ่มต้นตามคลัง) + คลังรูปจากตั้งค่าบริษัท
+    portfolio: parseImgs(q.portfolioJson),
+    portfolioLibrary: settings.portfolio,
     customer: cust ? { id: cust.id, name: cust.name, chname: cust.chname, phone: cust.phone, province: cust.province, code: cust.code, bu: cust.bu, taxId: null } : null,
     history: acts.map((a) => ({ kind: a.action, field: a.field, oldValue: a.oldValue, newValue: a.newValue, at: a.at, who: a.who || a.email || 'ระบบ' })),
   })
@@ -72,6 +83,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       if (!(mine || admin)) return NextResponse.json({ error: 'ส่งขออนุมัติได้เฉพาะผู้สร้างใบ' }, { status: 403 })
       if (cur.status !== 'ร่าง') return NextResponse.json({ error: 'ส่งขออนุมัติได้เฉพาะใบร่าง' }, { status: 400 })
       await db.update(quotations).set({ status: 'รออนุมัติ', updatedAt: new Date() }).where(eq(quotations.id, id))
+      await db.update(customers).set({ quoteStatus: 'รอตรวจใบเสนอราคา', updatedAt: new Date() }).where(eq(customers.id, cur.customerId))
       await log('quote-submit', 'สถานะ', cur.status, 'รออนุมัติ')
       return NextResponse.json({ ok: true })
     }
@@ -131,7 +143,19 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   for (const k of ['exclusions', 'warranty', 'spec', 'note'] as const) {
     if (k in b) patch[k] = String(b[k] ?? '').trim().slice(0, 8000) || null
   }
+  if ('custName' in b) patch.custName = String(b.custName ?? '').trim().slice(0, 160) || null
+  if ('custAddress' in b) patch.custAddress = String(b.custAddress ?? '').trim().slice(0, 1000) || null
+  if ('custPhone' in b) patch.custPhone = String(b.custPhone ?? '').trim().slice(0, 40) || null
+  if ('custTaxId' in b) patch.custTaxId = String(b.custTaxId ?? '').trim().slice(0, 20) || null
   if ('includePortfolio' in b) patch.includePortfolio = !!b.includePortfolio
+  // รูปผลงานที่เลือกเฉพาะใบนี้
+  if (Array.isArray(b.portfolio)) {
+    const imgs = (b.portfolio as unknown[]).filter((x): x is string => typeof x === 'string' && x.startsWith('data:image/')).slice(0, 8)
+    const json = JSON.stringify(imgs)
+    if (json.length > 6_000_000) return NextResponse.json({ error: 'รูปผลงานรวมกันใหญ่เกินไป — ลดจำนวนหรือขนาดรูปลง' }, { status: 400 })
+    patch.portfolioJson = json
+    patch.includePortfolio = imgs.length > 0
+  }
   await db.update(quotations).set(patch).where(eq(quotations.id, id))
 
   // รายการ/ต้นทุน/งวด — ส่งมาทั้งชุด แทนที่ของเดิม (ธุรกรรมเดี่ยวต่อชุด เรียบง่ายพอสำหรับฟอร์มเดียว)

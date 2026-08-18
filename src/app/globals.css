@@ -322,3 +322,4 @@ th.act,td.act{width:56px}td.act{text-align:center}
 /* กราฟภาพรวม Budget Control — กว้างคงที่ต่อกลุ่ม เลื่อนแนวนอนเมื่อโปรเจคเยอะ */
 .chart-xscroll{overflow-x:auto;padding-bottom:4px}
 .chartf{display:block}
+.fs-toggle{border:none;background:none;padding:0;cursor:pointer;display:flex;align-items:center;text-align:left;font-family:inherit}
