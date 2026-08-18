@@ -6,7 +6,7 @@ import {
   INST_WORK, INST_PAY, PROJECT_STATUSES, canEdit, isAdminUp, type Role,
 } from '@/lib/constants'
 import { commas, fmtB, thDate } from '@/lib/format'
-import { bizGroupedBars, bizProjectBars, bizSCurve, cumulative, pickImage, type ProjectRow, type ExpenseRow, type InstRow, type HistItem } from './biz-shared'
+import { bizGroupedBars, bizSCurve, cumulative, pickImage, type ProjectRow, type ExpenseRow, type InstRow, type HistItem } from './biz-shared'
 
 type Me = { id: number; email: string; name: string | null; image: string | null; role: Role; bu: string | null }
 type Cust = { id: number; code: string; bu: string; name: string | null; chname: string | null; province: string | null; status: string; shownVal: number | null; d: string | null; isFinal: boolean }
@@ -57,8 +57,6 @@ export default function ProjectsView({ me, records, limitedData, showToast, onCh
         <Tile rail="#c2610a" lab="จ่ายแล้วรวม (อนุมัติ)" big={fmtB(spentSum)} unit="บาท" foot={`ค้างอนุมัติ ฿${fmtB(projects.reduce((a, p) => a + p.pendingAmount, 0))}`} />
         <Tile rail="#3f8f3a" lab="กำไรรับ−จ่าย รวม" big={fmtB(receivedSum - spentSum)} unit="บาท" foot="เฉพาะเงินเข้า-ออกจริง" />
       </div>
-
-      {list.length > 0 && <BudgetOverviewChart projects={list} />}
 
       <div className="alist">
         {list.map((p) => {
@@ -198,39 +196,6 @@ function NewProjectModal({ records, limitedData, onClose, onCreated, showToast }
         </div>
       </div>
     </div>
-  )
-}
-
-/**
- * ภาพรวม Budget Control — กราฟแท่ง 4 ชุด (สัญญา/รับแล้ว/จ่ายแล้ว/กำไร) ต่อโปรเจค
- * เรียงแยกตาม BU (เส้นประคั่นเมื่อเปลี่ยน BU) และช่องสุดท้ายเป็นยอดรวม
- */
-function BudgetOverviewChart({ projects }: { projects: ProjectRow[] }) {
-  const sorted = [...projects].sort((a, b) => (a.bu < b.bu ? -1 : a.bu > b.bu ? 1 : a.id - b.id))
-  const short = (s: string) => (s.length > 9 ? s.slice(0, 8) + '…' : s)
-  const groups = [
-    ...sorted.map((p, i) => ({ label: short(p.name), sub: p.bu, divider: i > 0 && sorted[i - 1].bu !== p.bu })),
-    { label: 'รวม', sub: `${sorted.length} งาน`, divider: true, emph: true },
-  ]
-  const sum = (f: (p: ProjectRow) => number) => sorted.reduce((a, p) => a + f(p), 0)
-  const series = [
-    { name: 'มูลค่าสัญญา', color: 'var(--pending, #9c9093)', vals: [...sorted.map((p) => p.contractAmount), sum((p) => p.contractAmount)] },
-    { name: 'รับเงินแล้ว', color: '#2563c9', vals: [...sorted.map((p) => p.received), sum((p) => p.received)] },
-    { name: 'จ่ายแล้วรวม', color: '#c2610a', vals: [...sorted.map((p) => p.spent), sum((p) => p.spent)] },
-    { name: 'กำไรรับ−จ่าย', color: '#3f8f3a', vals: [...sorted.map((p) => p.profit), sum((p) => p.profit)] },
-  ]
-  return (
-    <section className="card" style={{ marginBottom: 16 }}>
-      <div className="card-h"><h2>ภาพรวม Budget Control — ทุกโปรเจค</h2><span className="hint">บาท · ชี้ที่แท่งเพื่อดูตัวเลขเต็ม</span></div>
-      <p className="card-desc">แท่งละโปรเจค เรียงแยกตาม BU · ช่องขวาสุด = ยอดรวม · กำไรติดลบแสดงเป็นแท่งแดงใต้เส้นศูนย์</p>
-      <div className="chart-xscroll"><Svg html={bizProjectBars(groups, series)} /></div>
-      <div className="legend">
-        <span><i style={{ background: 'var(--pending, #9c9093)' }} />มูลค่าสัญญา</span>
-        <span><i style={{ background: '#2563c9' }} />รับเงินแล้ว</span>
-        <span><i style={{ background: '#c2610a' }} />จ่ายแล้วรวม (อนุมัติ)</span>
-        <span><i style={{ background: '#3f8f3a' }} />กำไรรับ−จ่าย</span>
-      </div>
-    </section>
   )
 }
 

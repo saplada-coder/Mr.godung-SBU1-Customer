@@ -318,7 +318,3 @@ th.act,td.act{width:56px}td.act{text-align:center}
   .budrow{grid-template-columns:1fr;gap:6px}
   .tabs{top:56px}
 }
-
-/* กราฟภาพรวม Budget Control — กว้างคงที่ต่อกลุ่ม เลื่อนแนวนอนเมื่อโปรเจคเยอะ */
-.chart-xscroll{overflow-x:auto;padding-bottom:4px}
-.chartf{display:block}
