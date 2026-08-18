@@ -517,6 +517,51 @@ export const billingDocItemsRelations = relations(billingDocItems, ({ one }) => 
 export type BillingDoc = typeof billingDocs.$inferSelect
 export type BillingDocItem = typeof billingDocItems.$inferSelect
 
+/** ใบสั่งซื้อ (PO) — ผูกงานก่อสร้าง (หมวดงบ 6 หมวด) หรือของสำนักงาน (project_id = null) */
+export const purchaseOrders = pgTable(
+  'purchase_orders',
+  {
+    id: serial('id').primaryKey(),
+    projectId: integer('project_id').references(() => projects.id, { onDelete: 'set null' }),
+    /** PO-BU1-2608001 รันต่อเดือนต่อ BU */
+    code: varchar('code', { length: 30 }).notNull(),
+    vendor: varchar('vendor', { length: 200 }).notNull(),
+    vendorAddress: text('vendor_address'),
+    vendorPhone: varchar('vendor_phone', { length: 40 }),
+    category: costCatEnum('category'),
+    issueDate: date('issue_date').notNull(),
+    deliveryDate: date('delivery_date'),
+    vatPct: numeric('vat_pct', { precision: 5, scale: 2 }),
+    subtotal: numeric('subtotal', { precision: 14, scale: 2 }).notNull(),
+    vatAmount: numeric('vat_amount', { precision: 14, scale: 2 }).notNull().default('0'),
+    total: numeric('total', { precision: 14, scale: 2 }).notNull(),
+    note: text('note'),
+    status: varchar('status', { length: 12 }).notNull().default('ปกติ'),
+    cancelReason: text('cancel_reason'),
+    createdBy: integer('created_by').references(() => users.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('po_project_idx').on(t.projectId)],
+)
+
+export const poItems = pgTable(
+  'po_items',
+  {
+    id: serial('id').primaryKey(),
+    poId: integer('po_id').notNull().references(() => purchaseOrders.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    description: text('description').notNull(),
+    qty: numeric('qty', { precision: 12, scale: 2 }),
+    unit: varchar('unit', { length: 30 }),
+    unitPrice: numeric('unit_price', { precision: 14, scale: 2 }),
+    amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
+  },
+  (t) => [index('po_items_po_idx').on(t.poId)],
+)
+
+export type PurchaseOrder = typeof purchaseOrders.$inferSelect
+export type PoItem = typeof poItems.$inferSelect
+
 export type Customer = typeof customers.$inferSelect
 export type NewCustomer = typeof customers.$inferInsert
 export type Appointment = typeof appointments.$inferSelect

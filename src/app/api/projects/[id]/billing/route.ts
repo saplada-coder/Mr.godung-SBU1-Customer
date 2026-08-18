@@ -83,13 +83,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   ]
   await db.insert(billingDocItems).values(rows.map((r, idx) => ({ docId: doc.id, seq: idx + 1, ...r })))
 
-  // sync สถานะงวด
+  // sync สถานะงวด — ออกย้อนหลังได้: งวดที่สถานะไปไกลกว่าแล้วจะไม่ถูกย้อน/ทับข้อมูลเดิม
   if (insts.length) {
     if (kind === 'invoice') {
       await db.update(projectInstallments).set({ payStatus: 'วางบิลแล้ว' })
         .where(inArray(projectInstallments.id, insts.filter((i) => i.payStatus === 'ยังไม่วางบิล').map((i) => i.id)))
     } else {
       for (const i of insts) {
+        if (i.payStatus === 'รับเงินแล้ว') continue // ใบเสร็จย้อนหลัง — วันที่/ยอดรับเดิมคงไว้
         await db.update(projectInstallments)
           .set({ payStatus: 'รับเงินแล้ว', paidAt: payDate, paidAmount: i.paidAmount ?? i.amount })
           .where(eq(projectInstallments.id, i.id))

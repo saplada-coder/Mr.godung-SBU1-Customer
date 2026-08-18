@@ -107,7 +107,7 @@ export default function QuotesView({ me, records, limitedData, openQuoteId, onOp
 }
 
 /* ---------------- เลือกลูกค้าเพื่อสร้างใบ ---------------- */
-function CustomerPicker({ records, limitedData, onClose, onPick }: { records: Cust[]; limitedData?: boolean; onClose: () => void; onPick: (id: number) => void }) {
+export function CustomerPicker({ records, limitedData, onClose, onPick }: { records: Cust[]; limitedData?: boolean; onClose: () => void; onPick: (id: number) => void }) {
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
   const list = useMemo(() => {

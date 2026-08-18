@@ -2,7 +2,7 @@
 import { sql } from 'drizzle-orm'
 import type { getDb } from '@/db'
 import {
-  quotations, projects, billingDocs,
+  quotations, projects, billingDocs, purchaseOrders,
   type Quotation, type QuotationItem, type QuotationCost, type QuotationInstallment,
 } from '@/db/schema'
 
@@ -37,6 +37,16 @@ export async function genBillingCode(db: ReturnType<typeof getDb>, prefix: strin
   const [{ nextSeq }] = (await db
     .select({ nextSeq: sql<number>`coalesce(max(right(code,3)::int),0)+1` })
     .from(billingDocs)
+    .where(sql`code like ${codePrefix + '%'}`)) as unknown as [{ nextSeq: number }]
+  return `${codePrefix}${String(nextSeq).padStart(3, '0')}`
+}
+
+/** เลขใบสั่งซื้อ: PO-{BU}-{ปี2หลัก}{เดือน}{ลำดับ3หลัก} */
+export async function genPoCode(db: ReturnType<typeof getDb>, bu: string, dateStr: string) {
+  const codePrefix = `PO-${bu}-${dateStr.slice(2, 4)}${dateStr.slice(5, 7)}`
+  const [{ nextSeq }] = (await db
+    .select({ nextSeq: sql<number>`coalesce(max(right(code,3)::int),0)+1` })
+    .from(purchaseOrders)
     .where(sql`code like ${codePrefix + '%'}`)) as unknown as [{ nextSeq: number }]
   return `${codePrefix}${String(nextSeq).padStart(3, '0')}`
 }

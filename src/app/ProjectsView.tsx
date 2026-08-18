@@ -848,7 +848,7 @@ function InstallmentModal({ projectId, contract, inst, onClose, onSaved, showToa
 }
 
 /* ---------------- ฟอร์มออกเอกสารการเงิน (ใบวางบิล/ใบเสร็จ/ใบกำกับภาษี) ---------------- */
-function BillingModal({ projectId, installments, preset, onClose, onSaved, showToast }: {
+export function BillingModal({ projectId, installments, preset, onClose, onSaved, showToast }: {
   projectId: number; installments: InstRow[]
   preset: { kind: string; instIds: number[]; invoiceRefId?: number }
   onClose: () => void; onSaved: (docId: number) => void; showToast: (m: string) => void
@@ -874,9 +874,8 @@ function BillingModal({ projectId, installments, preset, onClose, onSaved, showT
   useEffect(() => { if (kind === 'taxReceipt') setVat(true) }, [kind])
 
   const isInvoice = kind === 'invoice'
-  // งวดที่เลือกได้: วางบิล → งวดที่ยังไม่วางบิล · ใบเสร็จ → งวดที่ยังไม่รับเงิน (+ที่ถูก preselect ไว้)
-  const pickable = installments.filter((i) =>
-    sel.has(i.id) || (isInvoice ? i.payStatus === 'ยังไม่วางบิล' : i.payStatus !== 'รับเงินแล้ว'))
+  // เลือกได้ทุกงวด (ออกเอกสารย้อนหลังได้) — งวดที่รับเงินแล้วจะไม่ถูกเปลี่ยนสถานะ/วันที่รับเดิม
+  const pickable = installments
   const toggle = (id: number) => setSel((o) => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n })
 
   const subtotal = installments.filter((i) => sel.has(i.id)).reduce((a, i) => a + i.amount, 0)

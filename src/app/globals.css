@@ -336,3 +336,13 @@ th.act,td.act{width:56px}td.act{text-align:center}
 .pwa-n{flex:none;width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;font-weight:800;font-size:12px;display:grid;place-items:center;margin-top:1px}
 .pwa-share{display:inline-block;border:1.5px solid currentColor;border-radius:5px;padding:0 5px;font-size:12px}
 @media (max-width:520px){.pwa-banner{flex-wrap:wrap}.pwa-banner .btn{flex:1;justify-content:center}}
+
+/* ปุ่มสร้างเอกสารในหน้า "เอกสารการเงิน" */
+.fin-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.fin-create{display:flex;flex-direction:column;align-items:flex-start;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;cursor:pointer;text-align:left;font-family:inherit;color:var(--text);box-shadow:var(--shadow);transition:border-color .12s}
+.fin-create:hover{border-color:var(--accent)}
+.fin-ic{font-size:24px}
+.fin-tt{font-weight:750;font-size:13.5px}
+.fin-ss{font-size:11.5px;color:var(--text-faint);line-height:1.4}
+@media (max-width:900px){.fin-grid{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:520px){.fin-grid{grid-template-columns:1fr}}
