@@ -32,6 +32,7 @@ export default async function PoPrintPage({ params }: { params: Promise<{ id: st
   ])
   const p = po.projectId != null ? (await db.select().from(projects).where(eq(projects.id, po.projectId)).limit(1))[0] : null
   const creator = po.createdBy ? (await db.select().from(users).where(eq(users.id, po.createdBy)).limit(1))[0] : null
+  const approver = po.approvedBy && po.status === 'อนุมัติแล้ว' ? (await db.select().from(users).where(eq(users.id, po.approvedBy)).limit(1))[0] : null
   const cancelled = po.status === 'ยกเลิก'
   const sorted = [...items].sort((a, b) => a.seq - b.seq)
 
@@ -47,6 +48,7 @@ export default async function PoPrintPage({ params }: { params: Promise<{ id: st
     ['วันที่สั่งซื้อ', thd(po.issueDate)],
     ['กำหนดส่งของ', thd(po.deliveryDate)],
     ['ผู้สั่งซื้อ', creator?.name || ''],
+    ['ผู้อนุมัติ', approver?.name || ''],
   ]
 
   return (
@@ -55,6 +57,8 @@ export default async function PoPrintPage({ params }: { params: Promise<{ id: st
       <PrintToolbar />
       <div className="page">
         {cancelled && <div className="cancel-stamp">ยกเลิก</div>}
+        {po.status === 'รออนุมัติ' && <div className="cancel-stamp" style={{ color: 'rgba(100,100,100,.3)', borderColor: 'rgba(100,100,100,.3)' }}>รออนุมัติ</div>}
+        {po.status === 'ตีกลับ' && <div className="cancel-stamp">ตีกลับ</div>}
         <div className="doc-title">ใบสั่งซื้อ / Purchase Order<span className="orig">(ต้นฉบับ)</span></div>
         <div className="head">
           {/* eslint-disable-next-line @next/next/no-img-element */}

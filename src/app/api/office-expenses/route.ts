@@ -4,7 +4,7 @@ import { getDb } from '@/db'
 import { expenses, users, activityLog } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
 import { num, n0 } from '@/lib/biz'
-import { canEdit, isAdminUp, OFFICE_CAT_KEYS, costCatMeta } from '@/lib/constants'
+import { canEdit, OFFICE_CAT_KEYS, costCatMeta } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,13 +46,12 @@ export async function POST(req: Request) {
   const receiptUrl = typeof b.receiptUrl === 'string' && b.receiptUrl.startsWith('data:image/') && b.receiptUrl.length <= 900_000 ? b.receiptUrl : null
 
   const db = getDb()
-  const auto = isAdminUp(me.role)
+  // ค่าใช้จ่ายบันทึกแล้วมีผลทันที ไม่ต้องรออนุมัติ (คิวอนุมัติใช้กับใบ PO เท่านั้น)
   const [created] = await db.insert(expenses).values({
     projectId: null, category: category as typeof expenses.$inferInsert.category, description,
     vendor: String(b.vendor ?? '').trim().slice(0, 160) || null,
     amount: String(amount), expenseDate, receiptUrl,
-    status: auto ? 'อนุมัติแล้ว' : 'รออนุมัติ',
-    approvedBy: auto ? me.id : null, approvedAt: auto ? new Date() : null,
+    status: 'อนุมัติแล้ว', approvedBy: me.id, approvedAt: new Date(),
     createdBy: me.id,
   }).returning()
 

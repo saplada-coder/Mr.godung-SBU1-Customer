@@ -119,7 +119,7 @@ export default function Dashboard({ me }: { me: Me }) {
   const loadApprCount = useCallback(async () => {
     try {
       const r = await fetch('/api/approvals', { cache: 'no-store' })
-      if (r.ok) { const j = await r.json(); setApprCount((j.quotes?.length || 0) + (j.expenses?.length || 0)) }
+      if (r.ok) { const j = await r.json(); setApprCount(j.pos?.length || 0) }
     } catch { /* เงียบไว้ */ }
   }, [])
   useEffect(() => { loadApprCount() }, [loadApprCount])

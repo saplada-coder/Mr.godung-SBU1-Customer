@@ -536,7 +536,11 @@ export const purchaseOrders = pgTable(
     vatAmount: numeric('vat_amount', { precision: 14, scale: 2 }).notNull().default('0'),
     total: numeric('total', { precision: 14, scale: 2 }).notNull(),
     note: text('note'),
-    status: varchar('status', { length: 12 }).notNull().default('ปกติ'),
+    /** PO เป็นเอกสารเดียวที่ต้องอนุมัติ: รออนุมัติ → อนุมัติแล้ว / ตีกลับ (+ ยกเลิก) */
+    status: varchar('status', { length: 12 }).notNull().default('รออนุมัติ'),
+    approvedBy: integer('approved_by').references(() => users.id),
+    approvedAt: timestamp('approved_at', { withTimezone: true }),
+    rejectReason: text('reject_reason'),
     cancelReason: text('cancel_reason'),
     createdBy: integer('created_by').references(() => users.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

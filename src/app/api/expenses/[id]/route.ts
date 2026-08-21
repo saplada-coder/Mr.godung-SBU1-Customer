@@ -40,9 +40,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     return NextResponse.json({ ok: true })
   }
 
-  /* ---- แก้ไขรายการ (เฉพาะยังไม่อนุมัติ, ผู้บันทึกหรือ adminUp) — แก้แล้วกลับเข้าคิวรออนุมัติ ---- */
+  /* ---- แก้ไขรายการ — ผู้บันทึกแก้ของตัวเองได้, เจ้าของ/ผู้ดูแลระบบแก้ได้ทุกรายการ ---- */
   if (!(isAdminUp(me.role) || cur.createdBy === me.id)) return NextResponse.json({ error: 'แก้ได้เฉพาะผู้บันทึกรายการ' }, { status: 403 })
-  if (cur.status === 'อนุมัติแล้ว' && !isAdminUp(me.role)) return NextResponse.json({ error: 'รายการที่อนุมัติแล้ว แก้ได้เฉพาะเจ้าของ/ผู้ดูแลระบบ' }, { status: 403 })
 
   const patch: Record<string, unknown> = {}
   if ('category' in b && ALL_EXPENSE_CAT_KEYS.includes(String(b.category))) patch.category = b.category
@@ -51,7 +50,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if ('amount' in b) { const v = num(b.amount); if (v != null && v > 0) patch.amount = String(v) }
   if ('expenseDate' in b && /^\d{4}-\d{2}-\d{2}$/.test(String(b.expenseDate))) patch.expenseDate = b.expenseDate
   if ('receiptUrl' in b) patch.receiptUrl = typeof b.receiptUrl === 'string' && b.receiptUrl.startsWith('data:image/') && b.receiptUrl.length <= 900_000 ? b.receiptUrl : null
-  if (cur.status === 'ตีกลับ') { patch.status = isAdminUp(me.role) ? 'อนุมัติแล้ว' : 'รออนุมัติ'; patch.rejectReason = null }
+  if (cur.status !== 'อนุมัติแล้ว') { patch.status = 'อนุมัติแล้ว'; patch.rejectReason = null }
   if (Object.keys(patch).length) {
     await db.update(expenses).set(patch).where(eq(expenses.id, id))
     await log('expense-edit', undefined, undefined, String(patch.description ?? cur.description))
@@ -67,7 +66,6 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   const [cur] = await db.select().from(expenses).where(eq(expenses.id, id)).limit(1)
   if (!cur) return NextResponse.json({ error: 'not found' }, { status: 404 })
   if (!(isAdminUp(me.role) || (cur.createdBy === me.id && canEdit(me.role)))) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
-  if (cur.status === 'อนุมัติแล้ว' && !isAdminUp(me.role)) return NextResponse.json({ error: 'รายการที่อนุมัติแล้ว ลบได้เฉพาะเจ้าของ/ผู้ดูแลระบบ' }, { status: 400 })
   const p = cur.projectId != null ? (await db.select().from(projects).where(eq(projects.id, cur.projectId)).limit(1))[0] : undefined
   if (p?.status === 'ปิดงาน') return NextResponse.json({ error: 'งานปิดแล้ว ลบค่าใช้จ่ายไม่ได้' }, { status: 400 })
   await db.delete(expenses).where(eq(expenses.id, id))

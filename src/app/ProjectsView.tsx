@@ -501,7 +501,7 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
         {tab === 'exp' && (
           <div className="form" style={{ gridTemplateColumns: '1fr' }}>
             <div className="field full" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-              <div className="hintline">อนุมัติแล้ว ฿{commas(spent)} · รออนุมัติ ฿{commas(pendingAmt)} — ยอดเข้างบนับเฉพาะที่อนุมัติแล้ว</div>
+              <div className="hintline">จ่ายรวม ฿{commas(spent)} — บันทึกแล้วเข้างบทันที ไม่ต้องรออนุมัติ</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 <select value={expCat} onChange={(e) => setExpCat(e.target.value)}><option value="">ทุกหมวด</option>{COST_CATS.map((c) => <option key={c.k} value={c.k}>{c.label}</option>)}</select>
                 <select value={expStat} onChange={(e) => setExpStat(e.target.value)}><option value="">ทุกสถานะ</option>{['รออนุมัติ', 'อนุมัติแล้ว', 'ตีกลับ'].map((s) => <option key={s}>{s}</option>)}</select>
@@ -510,7 +510,7 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
             </div>
             {d.expenses.filter((e) => (!expCat || e.category === expCat) && (!expStat || e.status === expStat)).map((e) => {
               const em = expMeta(e.status), cm = costCatMeta(e.category)
-              const canRowEdit = editable && (admin || (e.createdBy === me.id && e.status !== 'อนุมัติแล้ว'))
+              const canRowEdit = editable && (admin || e.createdBy === me.id)
               return (
                 <div className="arow" key={e.id}>
                   <div className="ab" style={{ background: cm.c }} />
@@ -532,12 +532,6 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
                   </div>
                   <div className="ad">฿{commas(e.amount)}</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                    {e.status === 'รออนุมัติ' && admin && d.project.status !== 'ปิดงาน' && (
-                      <>
-                        <button className="row-btn" style={{ color: '#3f8f3a' }} onClick={async () => { const r = await fetch(`/api/expenses/${e.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'approve' }) }); if (r.ok) { showToast('อนุมัติแล้ว'); load(); onChanged() } }}>✓ อนุมัติ</button>
-                        <button className="row-btn" style={{ color: '#b0281c' }} onClick={async () => { const reason = await uiPrompt('เหตุผลที่ตีกลับ:'); if (reason?.trim()) { const r = await fetch(`/api/expenses/${e.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'reject', reason }) }); if (r.ok) { showToast('ตีกลับแล้ว'); load(); onChanged() } } }}>ตีกลับ</button>
-                      </>
-                    )}
                     {canRowEdit && <button className="row-btn" onClick={() => setExpOpen(e)}>แก้ไข</button>}
                   </div>
                 </div>
@@ -736,8 +730,7 @@ function ExpenseModal({ projectId, exp, admin, budgetInfo, onClose, onSaved, sho
       : await fetch(`/api/projects/${projectId}/expenses`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
     setBusy(false)
     if (r.ok) {
-      const j = await r.json()
-      showToast(exp ? 'แก้ไขแล้ว' : j.status === 'อนุมัติแล้ว' ? 'บันทึกแล้ว (อนุมัติทันที)' : 'บันทึกแล้ว — เข้าคิวรออนุมัติ')
+      showToast(exp ? 'แก้ไขแล้ว' : 'บันทึกแล้ว — เข้างบทันที')
       onSaved()
     } else showToast((await r.json()).error || 'บันทึกไม่สำเร็จ')
   }
@@ -750,7 +743,7 @@ function ExpenseModal({ projectId, exp, admin, budgetInfo, onClose, onSaved, sho
   return (
     <div className="modal-bd" style={{ zIndex: 80 }} onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal" role="dialog" aria-modal style={{ maxWidth: 500 }}>
-        <div className="modal-h"><div><h3>{exp ? 'แก้ไขค่าใช้จ่าย' : 'บันทึกค่าใช้จ่าย'}</h3><div className="sub">{admin ? 'สิทธิ์คุณอนุมัติทันที' : 'รายการจะเข้าคิวรออนุมัติจากเจ้าของ/ผู้ดูแลระบบ'}</div></div><button className="modal-x" onClick={onClose}>×</button></div>
+        <div className="modal-h"><div><h3>{exp ? 'แก้ไขค่าใช้จ่าย' : 'บันทึกค่าใช้จ่าย'}</h3><div className="sub">บันทึกแล้วมีผลเข้างบทันที — ไม่ต้องรออนุมัติ</div></div><button className="modal-x" onClick={onClose}>×</button></div>
         <div className="form">
           <div className="field"><label>หมวด *</label>
             <select value={f.category} onChange={(e) => setF((o) => ({ ...o, category: e.target.value }))}>

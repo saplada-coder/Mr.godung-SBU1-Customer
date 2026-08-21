@@ -37,7 +37,6 @@ export default function OfficeExpensesView({ me, showToast, onChanged }: {
   const approved = rows.filter((e) => e.status === 'อนุมัติแล้ว')
   const monthSum = approved.filter((e) => e.expenseDate.slice(0, 7) === thisMonth).reduce((a, e) => a + e.amount, 0)
   const yearSum = approved.filter((e) => e.expenseDate.slice(0, 4) === thisYear).reduce((a, e) => a + e.amount, 0)
-  const pendingSum = rows.filter((e) => e.status === 'รออนุมัติ').reduce((a, e) => a + e.amount, 0)
   const listSum = list.filter((e) => e.status === 'อนุมัติแล้ว').reduce((a, e) => a + e.amount, 0)
 
   // สัดส่วนรายหมวดของช่วงที่กรองอยู่
@@ -47,14 +46,14 @@ export default function OfficeExpensesView({ me, showToast, onChanged }: {
   return (
     <>
       <div className="view-head">
-        <div><h1>ค่าใช้จ่ายสำนักงาน</h1><p>รายจ่ายบริษัทที่ไม่ผูกกับงานลูกค้า — เข้าคิวอนุมัติเดียวกับรายจ่ายโครงการ</p></div>
+        <div><h1>ค่าใช้จ่ายสำนักงาน</h1><p>รายจ่ายบริษัทที่ไม่ผูกกับงานลูกค้า — บันทึกแล้วมีผลทันที</p></div>
         {editable && <button className="btn btn-primary" onClick={() => setFormOpen('new')}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}><path d="M12 5v14M5 12h14" /></svg>บันทึกค่าใช้จ่าย</button>}
       </div>
 
       <div className="statgrid4">
         <div className="stat"><div className="rail" /><div className="l">เดือนนี้ (อนุมัติแล้ว)</div><div className="v">฿{fmtB(monthSum)}</div><div className="s">{TH_MONTHS[+thisMonth.slice(5, 7)]} {thisMonth.slice(0, 4)}</div></div>
         <div className="stat"><div className="rail" /><div className="l">ปีนี้สะสม</div><div className="v">฿{fmtB(yearSum)}</div><div className="s">ปี {thisYear}</div></div>
-        <div className="stat"><div className="rail" style={{ background: '#b58600' }} /><div className="l">รออนุมัติ</div><div className="v">฿{fmtB(pendingSum)}</div><div className="s">{rows.filter((e) => e.status === 'รออนุมัติ').length} รายการ</div></div>
+        <div className="stat"><div className="rail" style={{ background: '#b58600' }} /><div className="l">รายการเดือนนี้</div><div className="v">{rows.filter((e) => e.expenseDate.slice(0, 7) === thisMonth).length}</div><div className="s">รายการ</div></div>
         <div className="stat"><div className="rail" style={{ background: '#3f8f3a' }} /><div className="l">ยอดตามฟิลเตอร์</div><div className="v">฿{fmtB(listSum)}</div><div className="s">{list.length} รายการ</div></div>
       </div>
 
@@ -83,7 +82,7 @@ export default function OfficeExpensesView({ me, showToast, onChanged }: {
       <div className="alist">
         {list.map((e) => {
           const em = expMeta(e.status), cm = costCatMeta(e.category)
-          const canRowEdit = editable && (admin || (e.createdBy === me.id && e.status !== 'อนุมัติแล้ว'))
+          const canRowEdit = editable && (admin || e.createdBy === me.id)
           return (
             <div className="arow" key={e.id}>
               <div className="ab" style={{ background: cm.c }} />
@@ -105,12 +104,6 @@ export default function OfficeExpensesView({ me, showToast, onChanged }: {
               </div>
               <div className="ad">฿{commas(e.amount)}</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                {e.status === 'รออนุมัติ' && admin && (
-                  <>
-                    <button className="row-btn" style={{ color: '#3f8f3a' }} onClick={async () => { const r = await fetch(`/api/expenses/${e.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'approve' }) }); if (r.ok) { showToast('อนุมัติแล้ว'); load(); onChanged() } }}>✓ อนุมัติ</button>
-                    <button className="row-btn" style={{ color: '#b0281c' }} onClick={async () => { const reason = await uiPrompt('เหตุผลที่ตีกลับ:'); if (reason?.trim()) { const r = await fetch(`/api/expenses/${e.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'reject', reason }) }); if (r.ok) { showToast('ตีกลับแล้ว'); load(); onChanged() } } }}>ตีกลับ</button>
-                  </>
-                )}
                 {canRowEdit && <button className="row-btn" onClick={() => setFormOpen(e)}>แก้ไข</button>}
               </div>
             </div>
@@ -157,8 +150,7 @@ function OfficeExpenseModal({ exp, admin, onClose, onSaved, showToast }: {
       : await fetch('/api/office-expenses', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
     setBusy(false)
     if (r.ok) {
-      const j = await r.json()
-      showToast(exp ? 'แก้ไขแล้ว' : j.status === 'อนุมัติแล้ว' ? 'บันทึกแล้ว (อนุมัติทันที)' : 'บันทึกแล้ว — เข้าคิวรออนุมัติ')
+      showToast(exp ? 'แก้ไขแล้ว' : 'บันทึกแล้ว')
       onSaved()
     } else showToast((await r.json()).error || 'บันทึกไม่สำเร็จ')
   }
@@ -171,7 +163,7 @@ function OfficeExpenseModal({ exp, admin, onClose, onSaved, showToast }: {
   return (
     <div className="modal-bd" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal" role="dialog" aria-modal style={{ maxWidth: 500 }}>
-        <div className="modal-h"><div><h3>{exp ? 'แก้ไขค่าใช้จ่ายสำนักงาน' : 'บันทึกค่าใช้จ่ายสำนักงาน'}</h3><div className="sub">{admin ? 'สิทธิ์คุณอนุมัติทันที' : 'รายการจะเข้าคิวรออนุมัติ'}</div></div><button className="modal-x" onClick={onClose}>×</button></div>
+        <div className="modal-h"><div><h3>{exp ? 'แก้ไขค่าใช้จ่ายสำนักงาน' : 'บันทึกค่าใช้จ่ายสำนักงาน'}</h3><div className="sub">บันทึกแล้วมีผลทันที — ไม่ต้องรออนุมัติ</div></div><button className="modal-x" onClick={onClose}>×</button></div>
         <div className="form">
           <div className="field"><label>หมวด *</label>
             <select value={f.category} onChange={(e) => setF((o) => ({ ...o, category: e.target.value }))}>

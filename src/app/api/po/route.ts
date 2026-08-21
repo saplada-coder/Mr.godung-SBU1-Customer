@@ -4,7 +4,7 @@ import { getDb } from '@/db'
 import { purchaseOrders, poItems, projects, users, activityLog } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
 import { num, n0, today, genPoCode } from '@/lib/biz'
-import { canEdit, ALL_EXPENSE_CAT_KEYS } from '@/lib/constants'
+import { canEdit, isAdminUp, ALL_EXPENSE_CAT_KEYS } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
@@ -69,6 +69,8 @@ export async function POST(req: Request) {
   const code = await genPoCode(db, bu, issueDate)
   const category = ALL_EXPENSE_CAT_KEYS.includes(String(b.category)) ? String(b.category) : null
 
+  // PO เป็นเอกสารเดียวที่ต้องอนุมัติ — เจ้าของ/ผู้ดูแลระบบออกเอง = อนุมัติทันที
+  const auto = isAdminUp(me.role)
   const [po] = await db.insert(purchaseOrders).values({
     projectId, code, vendor,
     vendorAddress: String(b.vendorAddress ?? '').trim().slice(0, 1000) || null,
@@ -79,6 +81,8 @@ export async function POST(req: Request) {
     vatPct: vatPct ? String(vatPct) : null,
     subtotal: String(subtotal), vatAmount: String(vatAmount), total: String(subtotal + vatAmount),
     note: String(b.note ?? '').trim().slice(0, 2000) || null,
+    status: auto ? 'อนุมัติแล้ว' : 'รออนุมัติ',
+    approvedBy: auto ? me.id : null, approvedAt: auto ? new Date() : null,
     createdBy: me.id,
   }).returning()
 
@@ -90,7 +94,7 @@ export async function POST(req: Request) {
 
   await db.insert(activityLog).values({
     projectId, userId: me.id, action: 'po-create',
-    field: 'ใบสั่งซื้อ', newValue: `${code} ${vendor} ฿${(subtotal + vatAmount).toLocaleString()}`,
+    field: 'ใบสั่งซื้อ', newValue: `${code} ${vendor} ฿${(subtotal + vatAmount).toLocaleString()}${auto ? '' : ' (รออนุมัติ)'}`,
   })
-  return NextResponse.json({ ok: true, id: po.id, code })
+  return NextResponse.json({ ok: true, id: po.id, code, status: po.status })
 }

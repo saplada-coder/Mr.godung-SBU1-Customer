@@ -138,6 +138,8 @@ export default function FinanceDocsView({ me, records, showToast, onChanged, onC
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <span className="an" style={cancelled ? { textDecoration: 'line-through' } : undefined}>{d.code}</span>
                   <span className="qchip" style={{ color: km.c, background: km.b, cursor: 'default' }}>{km.label}</span>
+                  {d.status === 'รออนุมัติ' && <span className="qchip" style={{ color: '#b58600', background: '#fbeec0', cursor: 'default' }}>รออนุมัติ</span>}
+                  {d.status === 'ตีกลับ' && <span className="qchip" style={{ color: '#b0281c', background: '#f4dbd7', cursor: 'default' }}>ตีกลับ</span>}
                   {cancelled && <span className="qchip" style={{ color: '#b0281c', background: '#f4dbd7', cursor: 'default' }}>ยกเลิก</span>}
                 </div>
                 <div className="as">{thDate(d.issueDate)} · {d.sub}</div>
