@@ -506,12 +506,29 @@ export const billingDocItems = pgTable(
   (t) => [index('billing_items_doc_idx').on(t.docId)],
 )
 
+/** รูปแนบเอกสารการเงิน (สลิปโอน / หลักฐานส่งงาน ฯลฯ) — เก็บเป็น data URL แบบเดียวกับบิลค่าใช้จ่าย */
+export const billingDocImages = pgTable(
+  'billing_doc_images',
+  {
+    id: serial('id').primaryKey(),
+    docId: integer('doc_id').notNull().references(() => billingDocs.id, { onDelete: 'cascade' }),
+    url: text('url').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    createdBy: integer('created_by').references(() => users.id),
+  },
+  (t) => [index('billing_images_doc_idx').on(t.docId)],
+)
+
 export const billingDocsRelations = relations(billingDocs, ({ one, many }) => ({
   project: one(projects, { fields: [billingDocs.projectId], references: [projects.id] }),
   items: many(billingDocItems),
+  images: many(billingDocImages),
 }))
 export const billingDocItemsRelations = relations(billingDocItems, ({ one }) => ({
   doc: one(billingDocs, { fields: [billingDocItems.docId], references: [billingDocs.id] }),
+}))
+export const billingDocImagesRelations = relations(billingDocImages, ({ one }) => ({
+  doc: one(billingDocs, { fields: [billingDocImages.docId], references: [billingDocs.id] }),
 }))
 
 export type BillingDoc = typeof billingDocs.$inferSelect

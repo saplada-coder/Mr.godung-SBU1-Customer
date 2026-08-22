@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BILL_KINDS, billKindMeta, COST_CATS, OFFICE_CATS, canEdit, isAdminUp, type Role } from '@/lib/constants'
 import { commas, thDate } from '@/lib/format'
-import { uiPrompt, type InstRow } from './biz-shared'
+import { pickImage, uiConfirm, uiPrompt, type InstRow } from './biz-shared'
 import { BillingModal } from './ProjectsView'
 import { CustomerPicker } from './QuotesView'
 
@@ -12,7 +12,7 @@ type Cust = { id: number; code: string; bu: string; name: string | null; chname:
 type ProjLite = { id: number; code: string; name: string; bu: string; customerName: string | null; status: string; contractAmount: number }
 type DocRow = {
   id: number; type: string; code: string; title: string; sub: string
-  total: number; issueDate: string; status: string; createdAt: string
+  total: number; issueDate: string; status: string; createdAt: string; imageCount: number
 }
 
 const stripC = (s: string) => s.replace(/[^\d]/g, '')
@@ -35,6 +35,7 @@ export default function FinanceDocsView({ me, records, showToast, onChanged, onC
   const [projPicker, setProjPicker] = useState<null | 'invoice' | 'receipt'>(null)
   const [billingCtx, setBillingCtx] = useState<{ projectId: number; installments: InstRow[]; preset: { kind: string; instIds: number[] } } | null>(null)
   const [poOpen, setPoOpen] = useState(false)
+  const [imgDoc, setImgDoc] = useState<DocRow | null>(null)
   const admin = isAdminUp(me.role)
   const editable = canEdit(me.role)
 
@@ -49,7 +50,7 @@ export default function FinanceDocsView({ me, records, showToast, onChanged, onC
       setBilling((j.docs as Record<string, never>[]).map((d) => ({
         id: d.id, type: d.kind, code: d.code, title: billKindMeta(d.kind).label,
         sub: `${d.projectName}${d.custName ? ' · ' + d.custName : ''}${d.createdByName ? ' · โดย ' + d.createdByName : ''}`,
-        total: d.total, issueDate: d.issueDate, status: d.status, createdAt: d.createdAt,
+        total: d.total, issueDate: d.issueDate, status: d.status, createdAt: d.createdAt, imageCount: d.imageCount || 0,
       })))
     }
     if (rp.ok) {
@@ -57,7 +58,7 @@ export default function FinanceDocsView({ me, records, showToast, onChanged, onC
       setPos((j.pos as Record<string, never>[]).map((d) => ({
         id: d.id, type: 'po', code: d.code, title: 'ใบสั่งซื้อ (PO)',
         sub: `${d.projectName} · ${d.vendor}${d.createdByName ? ' · โดย ' + d.createdByName : ''}`,
-        total: d.total, issueDate: d.issueDate, status: d.status, createdAt: d.createdAt,
+        total: d.total, issueDate: d.issueDate, status: d.status, createdAt: d.createdAt, imageCount: 0,
       })))
     }
     if (rj.ok) setProjects(((await rj.json()).projects as ProjLite[]).filter((p) => p.status !== 'ปิดงาน'))
@@ -147,6 +148,7 @@ export default function FinanceDocsView({ me, records, showToast, onChanged, onC
               <div className="ad">฿{commas(d.total)}</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                 <button className="row-btn" onClick={() => window.open(printUrl(d), '_blank')}>🖨 พิมพ์</button>
+                {d.type !== 'po' && <button className="row-btn" onClick={() => setImgDoc(d)}>📷 รูป{d.imageCount ? ` (${d.imageCount})` : ''}</button>}
                 {!cancelled && admin && <button className="row-btn" style={{ color: '#b0281c' }} onClick={() => cancelDoc(d)}>ยกเลิก</button>}
               </div>
             </div>
@@ -198,9 +200,80 @@ export default function FinanceDocsView({ me, records, showToast, onChanged, onC
           onSaved={(poId) => { setPoOpen(false); load(); onChanged(); window.open(`/po/${poId}/print`, '_blank') }}
           showToast={showToast} />
       )}
+      {imgDoc && (
+        <BillImagesModal doc={imgDoc} editable={editable}
+          onClose={() => setImgDoc(null)} onChanged={load} showToast={showToast} />
+      )}
       {/* ปุ่มเปิดดูงานจากรายการยังไม่จำเป็น — เผื่ออนาคต */}
       {void onOpenProject}
     </>
+  )
+}
+
+/* ---------------- รูปแนบเอกสารการเงิน (สลิปโอน / หลักฐาน) ---------------- */
+type DocImage = { id: number; url: string; createdAt: string }
+function BillImagesModal({ doc, editable, onClose, onChanged, showToast }: {
+  doc: DocRow; editable: boolean
+  onClose: () => void; onChanged: () => void; showToast: (m: string) => void
+}) {
+  const [images, setImages] = useState<DocImage[] | null>(null)
+  const [zoom, setZoom] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const load = useCallback(async () => {
+    const r = await fetch(`/api/billing/${doc.id}`, { cache: 'no-store' })
+    if (r.ok) setImages((await r.json()).images)
+    else { showToast('โหลดรูปไม่สำเร็จ'); setImages([]) }
+  }, [doc.id, showToast])
+  useEffect(() => { load() }, [load])
+
+  const addImage = () => pickImage(async (url) => {
+    setBusy(true)
+    const r = await fetch(`/api/billing/${doc.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'add-image', url }) })
+    setBusy(false)
+    if (r.ok) { showToast('แนบรูปแล้ว'); load(); onChanged() } else showToast((await r.json()).error || 'แนบรูปไม่สำเร็จ')
+  }, showToast)
+  const delImage = async (img: DocImage) => {
+    if (!await uiConfirm('ลบรูปนี้?')) return
+    const r = await fetch(`/api/billing/${doc.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'del-image', imageId: img.id }) })
+    if (r.ok) { showToast('ลบรูปแล้ว'); load(); onChanged() } else showToast((await r.json()).error || 'ลบรูปไม่สำเร็จ')
+  }
+
+  return (
+    <div className="modal-bd" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="modal" role="dialog" aria-modal style={{ maxWidth: 520 }}>
+        <div className="modal-h"><div><h3>รูปแนบ — {doc.code}</h3><div className="sub">{doc.title} · สลิปโอน / หลักฐานส่งงาน (สูงสุด 10 รูป)</div></div><button className="modal-x" onClick={onClose}>×</button></div>
+        <div className="form" style={{ gridTemplateColumns: '1fr' }}>
+          <div className="field full">
+            {images == null ? (
+              <div className="hintline">กำลังโหลดรูป…</div>
+            ) : images.length ? (
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {images.map((img) => (
+                  <span key={img.id} style={{ position: 'relative' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={img.url} alt="" style={{ width: 104, height: 104, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--border)', cursor: 'zoom-in' }} onClick={() => setZoom(img.url)} />
+                    {editable && <button type="button" className="qi-x" style={{ position: 'absolute', top: -6, right: -6, background: 'var(--surface-2)', borderRadius: '50%' }} onClick={() => delImage(img)}>×</button>}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div className="hintline">ยังไม่มีรูปแนบ{editable ? ' — กด "แนบรูป" เพื่อเพิ่มสลิปโอนหรือหลักฐาน' : ''}</div>
+            )}
+          </div>
+        </div>
+        <div className="modal-f">
+          <button className="btn" onClick={onClose}>ปิด</button>
+          {editable && (images?.length ?? 0) < 10 && <button className="btn btn-primary" disabled={busy} onClick={addImage}>{busy ? 'กำลังแนบ…' : '📷 แนบรูป'}</button>}
+        </div>
+      </div>
+      {zoom && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 160, background: 'rgba(0,0,0,.82)', display: 'grid', placeItems: 'center', cursor: 'zoom-out' }} onClick={(e) => { e.stopPropagation(); setZoom(null) }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={zoom} alt="" style={{ maxWidth: '94vw', maxHeight: '94vh', borderRadius: 10 }} />
+        </div>
+      )}
+    </div>
   )
 }
 

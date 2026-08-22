@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { and, desc, eq } from 'drizzle-orm'
 import { getDb } from '@/db'
-import { customers, appointments, notes, activityLog, users } from '@/db/schema'
+import { customers, appointments, notes, activityLog, users, quotations, projects } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
 import { getRates } from '@/lib/rates'
 import { estimate } from '@/lib/serialize'
@@ -151,6 +151,11 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   if (!cur) return NextResponse.json({ error: 'not found' }, { status: 404 })
   if (cur.code.startsWith('QT-'))
     return NextResponse.json({ error: 'ลบได้เฉพาะรายการที่เพิ่มใหม่ (กันลบข้อมูลจากชีท)' }, { status: 400 })
+  // กันลบลูกค้าที่มีเอกสารผูกอยู่ — ลบได้เฉพาะรายการซ้ำ/รายการเปล่า
+  const [q] = await db.select({ id: quotations.id }).from(quotations).where(eq(quotations.customerId, id)).limit(1)
+  if (q) return NextResponse.json({ error: 'ลบไม่ได้ — ลูกค้ารายนี้มีใบเสนอราคาแล้ว' }, { status: 400 })
+  const [p] = await db.select({ id: projects.id }).from(projects).where(eq(projects.customerId, id)).limit(1)
+  if (p) return NextResponse.json({ error: 'ลบไม่ได้ — ลูกค้ารายนี้มีงานก่อสร้างแล้ว' }, { status: 400 })
   await db.delete(customers).where(and(eq(customers.id, id)))
   return NextResponse.json({ ok: true })
 }

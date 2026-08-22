@@ -854,6 +854,7 @@ export function BillingModal({ projectId, installments, preset, onClose, onSaved
   const [vat, setVat] = useState(false)
   const [wht, setWht] = useState(false)
   const [f, setF] = useState({ issueDate: today, dueDate: '', payMethod: 'โอนเงิน', payDate: today, payRef: '', note: '' })
+  const [images, setImages] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
 
   // ดึงข้อมูลลูกค้าตั้งต้นจากใบเสนอราคาของงาน (fallback CRM)
@@ -890,7 +891,7 @@ export function BillingModal({ projectId, installments, preset, onClose, onSaved
         vatPct: vat ? 7 : 0, whtPct: wht ? 3 : 0,
         issueDate: f.issueDate, dueDate: f.dueDate || null,
         payMethod: f.payMethod, payDate: f.payDate, payRef: f.payRef, note: f.note,
-        invoiceRefId: preset.invoiceRefId ?? null,
+        invoiceRefId: preset.invoiceRefId ?? null, images,
       }),
     })
     setBusy(false)
@@ -962,6 +963,18 @@ export function BillingModal({ projectId, installments, preset, onClose, onSaved
             </label>
           </div>
           <div className="field full"><label>หมายเหตุ</label><input value={f.note} onChange={(e) => setF((o) => ({ ...o, note: e.target.value }))} /></div>
+          <div className="field full"><label>รูปแนบ (สลิปโอน / หลักฐาน — สูงสุด 10 รูป)</label>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              {images.map((u, i) => (
+                <span key={i} style={{ position: 'relative' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={u} alt="" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 9, border: '1px solid var(--border)' }} />
+                  <button type="button" className="qi-x" style={{ position: 'absolute', top: -6, right: -6, background: 'var(--surface-2)', borderRadius: '50%' }} onClick={() => setImages((o) => o.filter((_, x) => x !== i))}>×</button>
+                </span>
+              ))}
+              {images.length < 10 && <button type="button" className="btn btn-sm" onClick={() => pickImage((u) => setImages((o) => [...o, u]), showToast)}>📷 แนบรูป</button>}
+            </div>
+          </div>
           <div className="field full">
             <div className="sumbox">
               <div><span>รวมเงิน</span><b>฿{commas(subtotal)}</b></div>

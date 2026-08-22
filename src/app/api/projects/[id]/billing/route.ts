@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { eq, inArray } from 'drizzle-orm'
 import { getDb } from '@/db'
-import { projects, projectInstallments, billingDocs, billingDocItems, quotations, customers, activityLog } from '@/db/schema'
+import { projects, projectInstallments, billingDocs, billingDocItems, billingDocImages, quotations, customers, activityLog } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
 import { num, n0, today, genBillingCode } from '@/lib/biz'
 import { canEdit, billKindMeta, BILL_KINDS, PAY_METHODS } from '@/lib/constants'
@@ -82,6 +82,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     ...extraItems.map((i) => ({ description: i.description, amount: String(i.amount), installmentId: null as number | null })),
   ]
   await db.insert(billingDocItems).values(rows.map((r, idx) => ({ docId: doc.id, seq: idx + 1, ...r })))
+
+  // รูปแนบที่ส่งมาพร้อมฟอร์ม (สลิปโอน / หลักฐาน) — จำกัด 10 รูป, เฉพาะ data URL รูปภาพ
+  const images = Array.isArray(b.images)
+    ? (b.images as unknown[]).map(String).filter((u) => u.startsWith('data:image/') && u.length <= 900_000).slice(0, 10)
+    : []
+  if (images.length)
+    await db.insert(billingDocImages).values(images.map((url) => ({ docId: doc.id, url, createdBy: me.id })))
 
   // sync สถานะงวด — ออกย้อนหลังได้: งวดที่สถานะไปไกลกว่าแล้วจะไม่ถูกย้อน/ทับข้อมูลเดิม
   if (insts.length) {

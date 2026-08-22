@@ -181,7 +181,8 @@ export default function Dashboard({ me }: { me: Me }) {
           {view === 'approvals' && <ApprovalsView me={me} showToast={showToast} onChanged={bizChanged} onOpenProject={openProject} />}
           {view === 'users' && canManageUsers(me.role) && <UsersView me={me} showToast={showToast} />}
           {view === 'customers' && (
-            <Customers records={records} editable={editable} onManage={setManage} onAdd={() => setAddOpen(true)} onCreateQuote={createQuoteFor}
+            <Customers records={records} editable={editable} canDelete={isAdminUp(me.role)} onManage={setManage} onAdd={() => setAddOpen(true)} onCreateQuote={createQuoteFor}
+              onDelete={async (rec) => { const r = await fetch(`/api/customers/${rec.id}`, { method: 'DELETE' }); if (r.ok) { showToast('ลบ ' + rec.code + ' แล้ว'); load() } else showToast((await r.json()).error || 'ลบไม่สำเร็จ') }}
               patch={async (id, body) => { const r = await fetch(`/api/customers/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); if (r.ok) { showToast('อัปเดตแล้ว'); load() } else showToast((await r.json()).error || 'ผิดพลาด') }} />
           )}
         </div>
@@ -540,9 +541,10 @@ function Regions({ records }: { records: Rec[] }) {
 
 /* ---------------- Customers table ---------------- */
 type SortKey = 'code' | 'name' | 'detail' | 'sqm' | 'status' | 'quote' | 'apptDate' | 'd' | 'amount'
-function Customers({ records, editable, onManage, onAdd, onCreateQuote, patch }: {
-  records: Rec[]; editable: boolean; onManage: (r: Rec) => void; onAdd: () => void
+function Customers({ records, editable, canDelete, onManage, onAdd, onCreateQuote, onDelete, patch }: {
+  records: Rec[]; editable: boolean; canDelete: boolean; onManage: (r: Rec) => void; onAdd: () => void
   onCreateQuote: (r: Rec) => void
+  onDelete: (r: Rec) => Promise<void>
   patch: (id: number, body: Record<string, unknown>) => Promise<void>
 }) {
   const [q, setQ] = useState(''); const [fReg, setFReg] = useState(''); const [fStat, setFStat] = useState(''); const [fQuote, setFQuote] = useState(''); const [fMonth, setFMonth] = useState(''); const [fChan, setFChan] = useState('')
@@ -651,6 +653,7 @@ function Customers({ records, editable, onManage, onAdd, onCreateQuote, patch }:
                   <td className="act" style={{ whiteSpace: 'nowrap' }}>
                     {editable && <button className="row-btn" onClick={() => onManage(r)}>จัดการ</button>}
                     {editable && <button className="row-btn" style={{ marginLeft: 5, color: 'var(--accent)' }} title="สร้างใบเสนอราคาให้ลูกค้ารายนี้" onClick={async () => { if (await uiConfirm(`สร้างใบเสนอราคาให้ "${r.name || r.chname || r.code}"?`)) onCreateQuote(r) }}>+ใบเสนอ</button>}
+                    {canDelete && !r.code.startsWith('QT-') && <button className="row-btn" style={{ marginLeft: 5, color: '#b0281c' }} title="ลบลูกค้ารายนี้ออกจากระบบ (ใช้ลบรายการที่กรอกซ้ำ)" onClick={async () => { if (await uiConfirm(`ลบ "${r.name || r.chname || r.code}" (${r.code}) ออกจากระบบถาวร?\nนัดหมาย โน้ต และไฟล์แนบของรายการนี้จะถูกลบไปด้วย`)) await onDelete(r) }}>ลบ</button>}
                   </td>
                 </tr>
               )
