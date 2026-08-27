@@ -1,7 +1,7 @@
 import { redirect, notFound } from 'next/navigation'
 import { eq } from 'drizzle-orm'
 import { getDb } from '@/db'
-import { billingDocs, billingDocItems, projects, users } from '@/db/schema'
+import { billingDocs, billingDocItems, billingDocImages, projects, users } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
 import { getSettings } from '@/lib/settings'
 import { n0, bahtText } from '@/lib/biz'
@@ -26,9 +26,11 @@ export default async function BillingPrintPage({ params }: { params: Promise<{ i
 
   const [doc] = await db.select().from(billingDocs).where(eq(billingDocs.id, id)).limit(1)
   if (!doc) notFound()
-  const [[p], items, settings] = await Promise.all([
+  const [[p], items, images, settings] = await Promise.all([
     db.select().from(projects).where(eq(projects.id, doc.projectId)).limit(1),
     db.select().from(billingDocItems).where(eq(billingDocItems.docId, id)),
+    db.select({ id: billingDocImages.id, url: billingDocImages.url })
+      .from(billingDocImages).where(eq(billingDocImages.docId, id)).orderBy(billingDocImages.id),
     getSettings(),
   ])
   const creator = doc.createdBy ? (await db.select().from(users).where(eq(users.id, doc.createdBy)).limit(1))[0] : null
@@ -138,6 +140,19 @@ export default async function BillingPrintPage({ params }: { params: Promise<{ i
           </div>
         </div>
       </div>
+
+      {/* ---------- หน้าถัดไป: รูปแนบ (สลิปโอน / หลักฐาน) ---------- */}
+      {images.length > 0 && (
+        <div className="page attach">
+          <div className="attach-h">เอกสารแนบ — {km.label} เลขที่ {doc.code}</div>
+          <div className="attach-g">
+            {images.map((img) => (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img className="att" key={img.id} src={img.url} alt="" />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -182,13 +197,19 @@ const PRINT_CSS = `
 .qprint .signs{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:30px;text-align:center;font-size:11.5px}
 .qprint .sig-space{height:34px}
 .qprint .sig-img{height:34px;object-fit:contain;display:block;margin:0 auto}
+.qprint .page.attach{min-height:0}
+.qprint .attach-h{font-weight:700;font-size:13px;margin-bottom:8px}
+.qprint .attach-g{display:grid;grid-template-columns:1fr 1fr;gap:6mm}
+.qprint .att{width:100%;max-height:120mm;object-fit:contain;display:block;border:1px solid #ccc}
 .qprint .cancel-stamp{position:absolute;top:40%;left:50%;transform:translate(-50%,-50%) rotate(-18deg);font-size:64px;font-weight:800;color:rgba(200,16,46,.28);border:6px solid rgba(200,16,46,.28);border-radius:14px;padding:6px 30px;pointer-events:none}
 .qprint .ptoolbar{position:fixed;top:12px;right:14px;display:flex;gap:8px;z-index:50}
 .qprint .ptoolbar button{background:#111;color:#fff;border:none;border-radius:9px;padding:10px 16px;font-weight:700;font-size:13.5px;cursor:pointer;font-family:inherit}
 .qprint .ptoolbar button:hover{background:#333}
 @media print{
   .qprint{background:#fff;padding:0}
-  .qprint .page{box-shadow:none;margin:0;width:auto;min-height:0}
+  .qprint .page{box-shadow:none;margin:0;width:auto;min-height:0;page-break-after:always}
+  .qprint .page:last-child{page-break-after:auto}
+  .qprint .att{break-inside:avoid}
   .qprint .ptoolbar{display:none}
 }
 @page{size:A4;margin:0}
