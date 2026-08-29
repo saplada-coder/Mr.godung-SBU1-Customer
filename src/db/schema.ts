@@ -406,6 +406,24 @@ export const projectInstallments = pgTable(
   (t) => [index('pinst_project_idx').on(t.projectId)],
 )
 
+/**
+ * คลังเอกสารของลูกค้าประจำงาน — เก็บเป็น "ลิงก์" (Google Drive, OneDrive, ลิงก์แชร์ ฯลฯ)
+ * ไม่ได้อัปไฟล์เข้าฐานข้อมูล เพราะไฟล์แบบแปลน/สัญญาใหญ่เกินกว่าจะเก็บเป็น data URL
+ */
+export const projectLinks = pgTable(
+  'project_links',
+  {
+    id: serial('id').primaryKey(),
+    projectId: integer('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+    /** ชื่อกำกับว่าเป็นลิงก์อะไร เช่น "แบบแปลน", "สัญญาจ้าง", "รูปหน้างาน" */
+    title: varchar('title', { length: 160 }).notNull(),
+    url: text('url').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    createdBy: integer('created_by').references(() => users.id),
+  },
+  (t) => [index('project_links_project_idx').on(t.projectId)],
+)
+
 export const customersRelations = relations(customers, ({ many, one }) => ({
   appointments: many(appointments),
   attachments: many(attachments),
@@ -443,6 +461,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   budgets: many(projectBudgets),
   expenses: many(expenses),
   installments: many(projectInstallments),
+  links: many(projectLinks),
 }))
 export const projectBudgetsRelations = relations(projectBudgets, ({ one }) => ({
   project: one(projects, { fields: [projectBudgets.projectId], references: [projects.id] }),
@@ -452,6 +471,9 @@ export const expensesRelations = relations(expenses, ({ one }) => ({
 }))
 export const projectInstallmentsRelations = relations(projectInstallments, ({ one }) => ({
   project: one(projects, { fields: [projectInstallments.projectId], references: [projects.id] }),
+}))
+export const projectLinksRelations = relations(projectLinks, ({ one }) => ({
+  project: one(projects, { fields: [projectLinks.projectId], references: [projects.id] }),
 }))
 
 /**
@@ -596,4 +618,5 @@ export type Project = typeof projects.$inferSelect
 export type ProjectBudget = typeof projectBudgets.$inferSelect
 export type Expense = typeof expenses.$inferSelect
 export type ProjectInstallment = typeof projectInstallments.$inferSelect
+export type ProjectLink = typeof projectLinks.$inferSelect
 export type CompanySettings = typeof companySettings.$inferSelect

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { desc, eq } from 'drizzle-orm'
 import { getDb } from '@/db'
-import { projects, projectBudgets, projectInstallments, expenses, customers, users, activityLog, billingDocs } from '@/db/schema'
+import { projects, projectBudgets, projectInstallments, projectLinks, expenses, customers, users, activityLog, billingDocs } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
 import { n0, num, today } from '@/lib/biz'
 import { canEdit, canApprove, isAdminUp, COST_CAT_KEYS, PROJECT_STATUSES, DEFAULT_INSTALLMENTS } from '@/lib/constants'
@@ -16,10 +16,11 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const [p] = await db.select().from(projects).where(eq(projects.id, id)).limit(1)
   if (!p) return NextResponse.json({ error: 'not found' }, { status: 404 })
 
-  const [budgets, exps, insts, [cust], allUsers, acts, bills] = await Promise.all([
+  const [budgets, exps, insts, links, [cust], allUsers, acts, bills] = await Promise.all([
     db.select().from(projectBudgets).where(eq(projectBudgets.projectId, id)),
     db.select().from(expenses).where(eq(expenses.projectId, id)).orderBy(desc(expenses.expenseDate), desc(expenses.id)),
     db.select().from(projectInstallments).where(eq(projectInstallments.projectId, id)),
+    db.select().from(projectLinks).where(eq(projectLinks.projectId, id)).orderBy(desc(projectLinks.id)),
     db.select().from(customers).where(eq(customers.id, p.customerId)).limit(1),
     db.select({ id: users.id, name: users.name, email: users.email }).from(users),
     db.select({ action: activityLog.action, field: activityLog.field, oldValue: activityLog.oldValue, newValue: activityLog.newValue, at: activityLog.createdAt, who: users.name, email: users.email })
@@ -48,6 +49,9 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     installments: insts.sort((a, b) => a.seq - b.seq).map((i) => ({
       id: i.id, seq: i.seq, title: i.title, detail: i.detail, percent: num(i.percent), amount: n0(i.amount),
       dueDate: i.dueDate, workStatus: i.workStatus, payStatus: i.payStatus, paidAt: i.paidAt, paidAmount: num(i.paidAmount), note: i.note,
+    })),
+    links: links.map((l) => ({
+      id: l.id, title: l.title, url: l.url, createdAt: l.createdAt, createdByName: userName(l.createdBy),
     })),
     billing: bills.map((d) => ({
       id: d.id, kind: d.kind, code: d.code, invoiceRefId: d.invoiceRefId,

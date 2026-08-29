@@ -16,6 +16,27 @@ export const n0 = (v: string | null | undefined) => (v == null ? 0 : Number(v) |
 export const today = () => new Date().toISOString().slice(0, 10)
 
 /**
+ * ลิงก์เอกสารที่ผู้ใช้วางมา — เติม https:// ให้ถ้าพิมพ์มาแบบ drive.google.com/…
+ * ปฏิเสธ scheme อื่นทั้งหมด (javascript:, data:) เพราะลิงก์นี้ถูกเรนเดอร์เป็น <a href> ให้คนกด
+ * คืน null ถ้าไม่ใช่ URL ที่ใช้ได้
+ */
+export function normDocUrl(raw: unknown): string | null {
+  let s = String(raw ?? '').trim()
+  if (!s) return null
+  // ไม่มี scheme → เติม https ให้ · มี scheme อื่นที่ไม่ใช่ http(s) → ตีตก
+  if (!/^https?:\/\//i.test(s)) {
+    if (/^[a-z][a-z0-9+.-]*:/i.test(s)) return null
+    s = 'https://' + s
+  }
+  if (s.length > 2000) return null
+  try {
+    const u = new URL(s)
+    if ((u.protocol !== 'http:' && u.protocol !== 'https:') || !u.hostname) return null
+  } catch { return null }
+  return s
+}
+
+/**
  * เลขที่เอกสาร: {QT|PJ}-{BU}-{ปี ค.ศ. 2 หลัก}{เดือน 2 หลัก}{ลำดับ 3 หลัก}
  * ลำดับรันต่อเดือนต่อ BU เช่น QT-BU1-2608001 (ตามฟอร์มจริงของบริษัท)
  */

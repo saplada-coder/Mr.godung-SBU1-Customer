@@ -302,14 +302,17 @@ type Detail = {
   expenses: ExpenseRow[]
   installments: InstRow[]
   billing: BillingRow[]
+  links: LinkRow[]
   history: HistItem[]
 }
+/** ลิงก์เอกสารของลูกค้าที่แนบไว้กับงาน (Drive / ลิงก์แชร์ ฯลฯ) */
+type LinkRow = { id: number; title: string; url: string; createdAt: string; createdByName: string | null }
 
 export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
   id: number; me: Me; onClose: () => void; onChanged: () => void; showToast: (m: string) => void
 }) {
   const [d, setD] = useState<Detail | null>(null)
-  const [tab, setTab] = useState<'overview' | 'inst' | 'exp' | 'budget' | 'bill'>('overview')
+  const [tab, setTab] = useState<'overview' | 'inst' | 'exp' | 'budget' | 'bill' | 'docs'>('overview')
   const [busy, setBusy] = useState(false)
   const [expOpen, setExpOpen] = useState<ExpenseRow | 'new' | null>(null)
   const [instOpen, setInstOpen] = useState<InstRow | 'new' | null>(null)
@@ -373,7 +376,7 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
         </div>
 
         <div className="tabs">
-          {([['overview', 'ภาพรวม & กราฟ'], ['inst', `งวดงาน (${d.installments.length})`], ['exp', `ค่าใช้จ่าย (${d.expenses.length})`], ['bill', `เอกสารเงิน (${d.billing.length})`], ['budget', 'งบประมาณ']] as const).map(([k, l]) => (
+          {([['overview', 'ภาพรวม & กราฟ'], ['inst', `งวดงาน (${d.installments.length})`], ['exp', `ค่าใช้จ่าย (${d.expenses.length})`], ['bill', `เอกสารเงิน (${d.billing.length})`], ['budget', 'งบประมาณ'], ['docs', `เอกสารลูกค้า (${d.links.length})`]] as const).map(([k, l]) => (
             <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>
           ))}
         </div>
@@ -604,6 +607,12 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
             onSave={(budgets) => patch({ budgets }, 'บันทึกงบประมาณแล้ว')} />
         )}
 
+        {/* ================= เอกสารลูกค้า (ลิงก์) ================= */}
+        {tab === 'docs' && (
+          <DocLinksTab projectId={id} links={d.links} editable={canEdit(me.role)} closed={p.status === 'ปิดงาน'}
+            onChanged={() => { load(); onChanged() }} showToast={showToast} />
+        )}
+
         <div className="modal-f"><button className="btn" onClick={onClose}>ปิด</button></div>
 
         {expOpen && (
@@ -640,6 +649,7 @@ function projHistText(h: HistItem): string {
     'project-status': 'เปลี่ยนสถานะ', 'project-edit': 'แก้ไขข้อมูล', 'budget-edit': 'ตั้ง/แก้งบประมาณ',
     'expense-create': 'บันทึกค่าใช้จ่าย', 'expense-approve': 'อนุมัติค่าใช้จ่าย ✓', 'expense-reject': 'ตีกลับค่าใช้จ่าย',
     'expense-edit': 'แก้ไขค่าใช้จ่าย', 'expense-delete': 'ลบค่าใช้จ่าย', installment: 'อัปเดตงวด',
+    'link-add': 'เพิ่มลิงก์เอกสาร 🔗', 'link-edit': 'แก้ไขลิงก์เอกสาร', 'link-delete': 'ลบลิงก์เอกสาร',
   }
   const base = map[h.kind] || h.kind
   const parts = [h.field, h.oldValue && h.newValue ? `${h.oldValue} → ${h.newValue}` : h.newValue].filter(Boolean)
@@ -694,6 +704,105 @@ function BudgetTab({ d, admin, editable, busy, onSave }: {
           <button className="btn btn-primary" disabled={busy} onClick={() => onSave(COST_CATS.map((c) => ({ category: c.k, amount: +vals[c.k] || 0 })))}>{busy ? 'กำลังบันทึก…' : 'บันทึกงบประมาณ'}</button>
         </div>
       )}
+    </div>
+  )
+}
+
+/* ---------------- แท็บเอกสารลูกค้า (คลังลิงก์) ---------------- */
+const linkHost = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, '') } catch { return u } }
+
+function DocLinksTab({ projectId, links, editable, closed, onChanged, showToast }: {
+  projectId: number; links: LinkRow[]; editable: boolean; closed: boolean
+  onChanged: () => void; showToast: (m: string) => void
+}) {
+  const [title, setTitle] = useState(''); const [url, setUrl] = useState('')
+  const [edit, setEdit] = useState<{ id: number; title: string; url: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const send = async (path: string, init: RequestInit, okMsg: string) => {
+    setBusy(true)
+    const r = await fetch(path, init)
+    setBusy(false)
+    if (r.ok) { showToast(okMsg); onChanged(); return true }
+    showToast((await r.json()).error || 'ทำรายการไม่สำเร็จ'); return false
+  }
+
+  const add = async () => {
+    if (!title.trim()) { showToast('ตั้งชื่อลิงก์ก่อนว่าเป็นเอกสารอะไร'); return }
+    if (!url.trim()) { showToast('วางลิงก์ก่อน'); return }
+    const ok = await send(`/api/projects/${projectId}/links`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title, url }),
+    }, 'เพิ่มลิงก์แล้ว')
+    if (ok) { setTitle(''); setUrl('') }
+  }
+  const saveEdit = async () => {
+    if (!edit) return
+    const ok = await send(`/api/links/${edit.id}`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: edit.title, url: edit.url }),
+    }, 'แก้ไขลิงก์แล้ว')
+    if (ok) setEdit(null)
+  }
+  const del = async (l: LinkRow) => {
+    if (!await uiConfirm(`ลบลิงก์ "${l.title}" ออกจากคลังเอกสาร?\n(ลบแค่ลิงก์ ไฟล์ต้นทางไม่ถูกลบ)`)) return
+    await send(`/api/links/${l.id}`, { method: 'DELETE' }, 'ลบลิงก์แล้ว')
+  }
+  const copy = async (l: LinkRow) => {
+    try { await navigator.clipboard.writeText(l.url); showToast('คัดลอกลิงก์แล้ว') }
+    catch { showToast('คัดลอกไม่สำเร็จ — กด "เปิด" แล้วคัดลอกจากช่อง URL แทน') }
+  }
+
+  return (
+    <div className="form" style={{ gridTemplateColumns: '1fr' }}>
+      <div className="field full">
+        <div className="hintline">เก็บ<b>ลิงก์</b>เอกสารของลูกค้าไว้ที่เดียว — แบบแปลน สัญญา โฉนด รูปหน้างาน ฯลฯ · แชร์ไฟล์ใน Google Drive/OneDrive ให้ &quot;ผู้ที่มีลิงก์เปิดได้&quot; แล้วเอาลิงก์มาวางที่นี่ (ระบบเก็บลิงก์ ไม่ได้เก็บตัวไฟล์)</div>
+        {closed && editable && <div className="hintline" style={{ color: '#3f8f3a' }}>✓ งานนี้ปิดแล้ว แต่แท็บนี้ยัง<b>เพิ่ม/แก้ลิงก์ได้</b> — เอาไว้แนบเอกสารส่งมอบและใบรับประกันย้อนหลัง</div>}
+      </div>
+
+      {editable && (
+        <div className="field full">
+          <label>เพิ่มลิงก์ใหม่</label>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <input style={{ flex: '1 1 160px' }} value={title} onChange={(e) => setTitle(e.target.value)}
+              placeholder="ชื่อลิงก์ เช่น แบบแปลน" onKeyDown={(e) => { if (e.key === 'Enter') add() }} />
+            <input style={{ flex: '2 1 240px' }} value={url} onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://drive.google.com/…" onKeyDown={(e) => { if (e.key === 'Enter') add() }} />
+            <button className="btn btn-primary btn-sm" style={{ flex: '0 0 auto' }} disabled={busy} onClick={add}>+ เพิ่มลิงก์</button>
+          </div>
+          <div className="hintline">พิมพ์ชื่อโดเมนมาเฉย ๆ ก็ได้ ระบบเติม https:// ให้เอง · เพิ่มได้ไม่จำกัดจำนวน</div>
+        </div>
+      )}
+
+      {links.map((l) => (
+        <div className="arow" key={l.id} style={{ alignItems: 'flex-start' }}>
+          <div className="ab" style={{ background: '#2563c9' }} />
+          {edit?.id === l.id ? (
+            <div className="aw" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <input style={{ flex: '1 1 160px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', color: 'var(--text)', fontSize: 13 }}
+                value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} />
+              <input style={{ flex: '2 1 240px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', color: 'var(--text)', fontSize: 13 }}
+                value={edit.url} onChange={(e) => setEdit({ ...edit, url: e.target.value })} />
+              <button className="btn btn-primary btn-sm" disabled={busy} onClick={saveEdit}>บันทึก</button>
+              <button className="btn btn-sm" onClick={() => setEdit(null)}>ยกเลิก</button>
+            </div>
+          ) : (
+            <>
+              <div className="aw">
+                <div className="an">{l.title}</div>
+                <div className="as" style={{ wordBreak: 'break-all' }}>{linkHost(l.url)} · เพิ่มโดย {l.createdByName || '—'} · {thDate(String(l.createdAt).slice(0, 10))}</div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <a className="row-btn" href={l.url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', textDecoration: 'none', textAlign: 'center' }}>↗ เปิด</a>
+                <button className="row-btn" onClick={() => copy(l)}>คัดลอกลิงก์</button>
+                {editable && <button className="row-btn" onClick={() => setEdit({ id: l.id, title: l.title, url: l.url })}>แก้ไข</button>}
+                {editable && <button className="row-btn" style={{ color: '#b0281c' }} disabled={busy} onClick={() => del(l)}>ลบ</button>}
+              </div>
+            </>
+          )}
+        </div>
+      ))}
+      {!links.length && <div className="empty">ยังไม่มีลิงก์เอกสาร{editable ? ' — ตั้งชื่อแล้ววางลิงก์ในช่องด้านบนได้เลย' : ''}</div>}
     </div>
   )
 }
