@@ -318,6 +318,7 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
   const [instOpen, setInstOpen] = useState<InstRow | 'new' | null>(null)
   // ฟอร์มออกเอกสารการเงิน — preselect ประเภท/งวด/ใบแจ้งหนี้อ้างอิงจากปุ่มลัด
   const [billOpen, setBillOpen] = useState<{ kind: string; instIds: number[]; invoiceRefId?: number } | null>(null)
+  const [docDetail, setDocDetail] = useState<BillingRow | null>(null)
   const [lightbox, setLightbox] = useState<string | null>(null)
   const [expCat, setExpCat] = useState(''); const [expStat, setExpStat] = useState('')
 
@@ -576,6 +577,7 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
                   <div className="ad">฿{commas(doc.total)}</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                     <button className="row-btn" onClick={() => window.open(`/billing/${doc.id}/print`, '_blank')}>🖨 พิมพ์</button>
+                    <button className="row-btn" onClick={() => setDocDetail(doc)}>📝 รายละเอียด</button>
                     {!cancelled && doc.kind === 'invoice' && editable && (
                       <button className="row-btn" style={{ color: '#3f8f3a' }}
                         onClick={() => setBillOpen({ kind: 'receipt', instIds: d.installments.filter((i) => i.payStatus === 'วางบิลแล้ว').map((i) => i.id), invoiceRefId: doc.id })}>
@@ -631,6 +633,11 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
             onClose={() => setBillOpen(null)}
             onSaved={(docId) => { setBillOpen(null); load(); onChanged(); window.open(`/billing/${docId}/print`, '_blank') }}
             showToast={showToast} />
+        )}
+        {docDetail && (
+          <BillDetailModal doc={{ id: docDetail.id, kind: docDetail.kind, code: docDetail.code, status: docDetail.status }}
+            editable={canEdit(me.role)} onClose={() => setDocDetail(null)}
+            onChanged={() => { load(); onChanged() }} showToast={showToast} />
         )}
         {lightbox && (
           <div className="modal-bd" style={{ zIndex: 90, cursor: 'zoom-out' }} onClick={() => setLightbox(null)}>
@@ -945,6 +952,133 @@ function InstallmentModal({ projectId, contract, inst, onClose, onSaved, showToa
           <button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? 'กำลังบันทึก…' : 'บันทึก'}</button>
         </div>
       </div>
+    </div>
+  )
+}
+
+/* ---------------- แก้รายละเอียด + รูปแนบของเอกสารที่ออกไปแล้ว ---------------- */
+type DocImage = { id: number; url: string; createdAt: string }
+type DocEdit = {
+  custName: string; custAddress: string; custPhone: string; custTaxId: string
+  note: string; payMethod: string; payRef: string; payDate: string | null; dueDate: string | null
+}
+
+/**
+ * แก้ข้อมูลบนหน้าเอกสาร (ลูกค้า/หมายเหตุ/การชำระ) + แนบรูปเพิ่ม โดยไม่ต้องยกเลิกแล้วออกใบใหม่
+ * ยอดเงิน รายการ และงวด แก้ที่นี่ไม่ได้ — กระทบยอดบัญชีกับสถานะงวด ต้องยกเลิกแล้วออกใหม่
+ */
+export function BillDetailModal({ doc, editable, onClose, onChanged, showToast }: {
+  doc: { id: number; kind: string; code: string; status: string }
+  editable: boolean
+  onClose: () => void; onChanged: () => void; showToast: (m: string) => void
+}) {
+  const [f, setF] = useState<DocEdit | null>(null)
+  const [images, setImages] = useState<DocImage[] | null>(null)
+  const [zoom, setZoom] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const cancelled = doc.status === 'ยกเลิก'
+  const canWrite = editable && !cancelled
+  const isInvoice = doc.kind === 'invoice'
+
+  const load = useCallback(async () => {
+    const r = await fetch(`/api/billing/${doc.id}`, { cache: 'no-store' })
+    if (!r.ok) { showToast('โหลดเอกสารไม่สำเร็จ'); setImages([]); return }
+    const j = await r.json()
+    setImages(j.images)
+    setF({
+      custName: j.doc.custName, custAddress: j.doc.custAddress, custPhone: j.doc.custPhone,
+      custTaxId: j.doc.custTaxId, note: j.doc.note, payMethod: j.doc.payMethod || 'โอนเงิน',
+      payRef: j.doc.payRef, payDate: j.doc.payDate, dueDate: j.doc.dueDate,
+    })
+  }, [doc.id, showToast])
+  useEffect(() => { load() }, [load])
+
+  const set = (k: keyof DocEdit, v: string) => setF((o) => (o ? { ...o, [k]: v } : o))
+
+  const save = async () => {
+    if (!f) return
+    setBusy(true)
+    const r = await fetch(`/api/billing/${doc.id}`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'edit', ...f }),
+    })
+    setBusy(false)
+    if (r.ok) { showToast('บันทึกรายละเอียดแล้ว'); onChanged(); onClose() }
+    else showToast((await r.json()).error || 'บันทึกไม่สำเร็จ')
+  }
+  const addImage = () => pickImage(async (url) => {
+    setBusy(true)
+    const r = await fetch(`/api/billing/${doc.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'add-image', url }) })
+    setBusy(false)
+    if (r.ok) { showToast('แนบรูปแล้ว'); load(); onChanged() } else showToast((await r.json()).error || 'แนบรูปไม่สำเร็จ')
+  }, showToast)
+  const delImage = async (img: DocImage) => {
+    if (!await uiConfirm('ลบรูปนี้?')) return
+    const r = await fetch(`/api/billing/${doc.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'del-image', imageId: img.id }) })
+    if (r.ok) { showToast('ลบรูปแล้ว'); load(); onChanged() } else showToast((await r.json()).error || 'ลบรูปไม่สำเร็จ')
+  }
+
+  return (
+    <div className="modal-bd" style={{ zIndex: 80 }} onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="modal" role="dialog" aria-modal style={{ width: 'min(560px,100%)' }}>
+        <div className="modal-h">
+          <div><h3>{doc.code}</h3><div className="sub">{billKindMeta(doc.kind).label} · แก้รายละเอียดและแนบรูปได้โดยไม่ต้องออกใบใหม่</div></div>
+          <button className="modal-x" onClick={onClose}>×</button>
+        </div>
+        {!f ? <div className="form" style={{ gridTemplateColumns: '1fr' }}><div className="hintline">กำลังโหลด…</div></div> : (
+          <div className="form">
+            {cancelled && <div className="field full"><div className="rejbox">เอกสารนี้ถูกยกเลิกแล้ว — ดูได้อย่างเดียว แก้ไขไม่ได้</div></div>}
+            <div className="field full"><div className="hintline">แก้ได้เฉพาะข้อมูลที่พิมพ์บนหน้าเอกสาร · <b>ยอดเงิน รายการ และงวด แก้ไม่ได้</b> — ถ้าตัวเลขผิดต้องยกเลิกใบนี้แล้วออกใบใหม่ (เลขเอกสารต้องรันต่อเนื่อง)</div></div>
+
+            <div className="fs"><div className="fs-t">ข้อมูลลูกค้าบนเอกสาร</div></div>
+            <div className="field"><label>ชื่อลูกค้า</label><input value={f.custName} disabled={!canWrite} onChange={(e) => set('custName', e.target.value)} /></div>
+            <div className="field"><label>เบอร์โทร</label><input value={f.custPhone} disabled={!canWrite} onChange={(e) => set('custPhone', e.target.value)} /></div>
+            <div className="field full"><label>ที่อยู่</label><input value={f.custAddress} disabled={!canWrite} onChange={(e) => set('custAddress', e.target.value)} /></div>
+            <div className="field"><label>เลขประจำตัวผู้เสียภาษี{doc.kind === 'taxReceipt' ? ' *' : ''}</label><input value={f.custTaxId} disabled={!canWrite} inputMode="numeric" maxLength={20} onChange={(e) => set('custTaxId', e.target.value)} /></div>
+
+            <div className="fs"><div className="fs-t">รายละเอียดเพิ่มเติม</div></div>
+            {isInvoice ? (
+              <div className="field"><label>ครบกำหนดชำระ</label><input type="date" value={f.dueDate || ''} disabled={!canWrite} onChange={(e) => set('dueDate', e.target.value)} /></div>
+            ) : (
+              <>
+                <div className="field"><label>วันที่รับเงิน</label><input type="date" value={f.payDate || ''} disabled={!canWrite} onChange={(e) => set('payDate', e.target.value)} /></div>
+                <div className="field"><label>ชำระโดย</label><select value={f.payMethod} disabled={!canWrite} onChange={(e) => set('payMethod', e.target.value)}>{PAY_METHODS.map((m) => <option key={m}>{m}</option>)}</select></div>
+                <div className="field"><label>อ้างอิง (เลขที่เช็ค/สลิป)</label><input value={f.payRef} disabled={!canWrite} onChange={(e) => set('payRef', e.target.value)} /></div>
+              </>
+            )}
+            <div className="field full"><label>หมายเหตุ</label><input value={f.note} disabled={!canWrite} onChange={(e) => set('note', e.target.value)} placeholder="ข้อความที่จะพิมพ์บนเอกสาร" /></div>
+
+            <div className="fs"><div className="fs-t">รูปแนบ (สลิปโอน / หลักฐาน — สูงสุด 10 รูป)</div></div>
+            <div className="field full">
+              {images == null ? <div className="hintline">กำลังโหลดรูป…</div> : images.length ? (
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  {images.map((img) => (
+                    <span key={img.id} style={{ position: 'relative' }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={img.url} alt="" style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--border)', cursor: 'zoom-in' }} onClick={() => setZoom(img.url)} />
+                      {canWrite && <button type="button" className="qi-x" style={{ position: 'absolute', top: -6, right: -6, background: 'var(--surface-2)', borderRadius: '50%' }} onClick={() => delImage(img)}>×</button>}
+                    </span>
+                  ))}
+                </div>
+              ) : <div className="hintline">ยังไม่มีรูปแนบ{canWrite ? ' — กด "แนบรูป" เพื่อเพิ่มสลิปโอนหรือหลักฐาน' : ''}</div>}
+              {canWrite && (images?.length ?? 0) < 10 && (
+                <button type="button" className="btn btn-sm" style={{ alignSelf: 'flex-start', marginTop: 8 }} disabled={busy} onClick={addImage}>📷 แนบรูป</button>
+              )}
+              <div className="hintline">รูปที่แนบจะพิมพ์ต่อท้ายเป็นหน้าเอกสารแนบ · แนบเพิ่มได้ทันที ไม่ต้องกดบันทึก</div>
+            </div>
+          </div>
+        )}
+        <div className="modal-f">
+          <button className="btn" onClick={onClose}>ปิด</button>
+          {f && canWrite && <button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? 'กำลังบันทึก…' : 'บันทึกรายละเอียด'}</button>}
+        </div>
+      </div>
+      {zoom && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 160, background: 'rgba(0,0,0,.82)', display: 'grid', placeItems: 'center', cursor: 'zoom-out' }} onClick={(e) => { e.stopPropagation(); setZoom(null) }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={zoom} alt="" style={{ maxWidth: '94vw', maxHeight: '94vh', borderRadius: 10 }} />
+        </div>
+      )}
     </div>
   )
 }

@@ -3,20 +3,32 @@ import { eq, and, ne, inArray } from 'drizzle-orm'
 import { getDb } from '@/db'
 import { billingDocs, billingDocItems, billingDocImages, projectInstallments, projects, activityLog } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
-import { canEdit, isAdminUp, billKindMeta } from '@/lib/constants'
+import { canEdit, isAdminUp, billKindMeta, PAY_METHODS } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
-/** รูปแนบของเอกสาร (สลิปโอน/หลักฐาน) — เรียงเก่าไปใหม่ */
+/** รายละเอียดเอกสาร + รูปแนบ (สลิปโอน/หลักฐาน) — รูปเรียงเก่าไปใหม่ */
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const me = await getSessionUser()
   if (!me) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const id = Number((await ctx.params).id)
   const db = getDb()
-  const images = await db
-    .select({ id: billingDocImages.id, url: billingDocImages.url, createdAt: billingDocImages.createdAt })
-    .from(billingDocImages).where(eq(billingDocImages.docId, id)).orderBy(billingDocImages.id)
-  return NextResponse.json({ images })
+  const [[doc], images] = await Promise.all([
+    db.select().from(billingDocs).where(eq(billingDocs.id, id)).limit(1),
+    db.select({ id: billingDocImages.id, url: billingDocImages.url, createdAt: billingDocImages.createdAt })
+      .from(billingDocImages).where(eq(billingDocImages.docId, id)).orderBy(billingDocImages.id),
+  ])
+  if (!doc) return NextResponse.json({ error: 'not found' }, { status: 404 })
+  return NextResponse.json({
+    images,
+    doc: {
+      id: doc.id, kind: doc.kind, code: doc.code, status: doc.status,
+      custName: doc.custName || '', custAddress: doc.custAddress || '',
+      custPhone: doc.custPhone || '', custTaxId: doc.custTaxId || '',
+      note: doc.note || '', payMethod: doc.payMethod || '', payRef: doc.payRef || '',
+      payDate: doc.payDate, dueDate: doc.dueDate, issueDate: doc.issueDate, total: Number(doc.total) || 0,
+    },
+  })
 }
 
 /**
@@ -48,6 +60,48 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     }
     const imgId = Number(b.imageId)
     await db.delete(billingDocImages).where(and(eq(billingDocImages.id, imgId), eq(billingDocImages.docId, id)))
+    return NextResponse.json({ ok: true })
+  }
+
+  /**
+   * แก้รายละเอียดบนหน้าเอกสารโดยไม่ต้องยกเลิกแล้วออกใบใหม่ — ข้อมูลลูกค้า หมายเหตุ การชำระ
+   * ยอดเงิน/รายการ/งวด แก้ที่นี่ไม่ได้ (กระทบสถานะงวดกับยอดบัญชี — ต้องยกเลิกแล้วออกใหม่)
+   */
+  if (b.action === 'edit') {
+    if (!canEdit(me.role)) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+    const db = getDb()
+    const [doc] = await db.select().from(billingDocs).where(eq(billingDocs.id, id)).limit(1)
+    if (!doc) return NextResponse.json({ error: 'not found' }, { status: 404 })
+    if (doc.status === 'ยกเลิก') return NextResponse.json({ error: 'เอกสารถูกยกเลิกแล้ว แก้ไขไม่ได้' }, { status: 400 })
+
+    const str = (v: unknown, max: number) => String(v ?? '').trim().slice(0, max) || null
+    const dateOk = (v: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v)) ? String(v) : null)
+    const patch: Record<string, unknown> = {}
+    if ('custName' in b) patch.custName = str(b.custName, 160)
+    if ('custAddress' in b) patch.custAddress = str(b.custAddress, 1000)
+    if ('custPhone' in b) patch.custPhone = str(b.custPhone, 40)
+    if ('custTaxId' in b) {
+      const v = str(b.custTaxId, 20)
+      if (doc.kind === 'taxReceipt' && !v)
+        return NextResponse.json({ error: 'ใบกำกับภาษีต้องมีเลขประจำตัวผู้เสียภาษีของลูกค้า' }, { status: 400 })
+      patch.custTaxId = v
+    }
+    if ('note' in b) patch.note = str(b.note, 2000)
+    if ('payRef' in b) patch.payRef = str(b.payRef, 80)
+    if ('payMethod' in b && doc.kind !== 'invoice')
+      patch.payMethod = (PAY_METHODS as readonly string[]).includes(b.payMethod) ? b.payMethod : null
+    if ('payDate' in b && doc.kind !== 'invoice') patch.payDate = dateOk(b.payDate) ?? doc.payDate
+    if ('dueDate' in b && doc.kind === 'invoice') patch.dueDate = dateOk(b.dueDate)
+
+    if (Object.keys(patch).length) {
+      await db.update(billingDocs).set(patch).where(eq(billingDocs.id, id))
+      const [p] = await db.select().from(projects).where(eq(projects.id, doc.projectId)).limit(1)
+      await db.insert(activityLog).values({
+        customerId: p?.customerId ?? null, projectId: doc.projectId, userId: me.id, action: 'billing-edit',
+        field: billKindMeta(doc.kind).label, oldValue: doc.code,
+        newValue: 'แก้รายละเอียด: ' + Object.keys(patch).join(', '),
+      })
+    }
     return NextResponse.json({ ok: true })
   }
 

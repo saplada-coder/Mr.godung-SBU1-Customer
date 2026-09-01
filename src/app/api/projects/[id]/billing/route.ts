@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { eq, inArray } from 'drizzle-orm'
+import { desc, eq, inArray } from 'drizzle-orm'
 import { getDb } from '@/db'
 import { projects, projectInstallments, billingDocs, billingDocItems, billingDocImages, quotations, customers, activityLog } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
@@ -112,7 +112,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   return NextResponse.json({ ok: true, id: doc.id, code })
 }
 
-/** ข้อมูลตั้งต้นสำหรับฟอร์มออกเอกสาร: ข้อมูลลูกค้าจากใบเสนอราคา (fallback CRM) */
+/**
+ * ข้อมูลตั้งต้นสำหรับฟอร์มออกเอกสาร — ไล่ทีละช่องตามลำดับ:
+ * เอกสารการเงินใบล่าสุด (งานนี้ก่อน แล้วค่อยงานอื่นของลูกค้าคนเดียวกัน) → ใบเสนอราคา → CRM
+ * ที่อยู่เต็ม/เลขผู้เสียภาษีไม่มีเก็บใน CRM — พิมพ์ครั้งเดียวแล้วใบต่อไปเติมให้เอง
+ */
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const me = await getSessionUser()
   if (!me) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
@@ -120,14 +124,32 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const db = getDb()
   const [p] = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1)
   if (!p) return NextResponse.json({ error: 'not found' }, { status: 404 })
-  const [q] = p.quotationId ? await db.select().from(quotations).where(eq(quotations.id, p.quotationId)).limit(1) : []
-  const [cust] = await db.select().from(customers).where(eq(customers.id, p.customerId)).limit(1)
+  const [[q], [cust], priorDocs] = await Promise.all([
+    p.quotationId ? db.select().from(quotations).where(eq(quotations.id, p.quotationId)).limit(1) : Promise.resolve([]),
+    db.select().from(customers).where(eq(customers.id, p.customerId)).limit(1),
+    db.select({
+      id: billingDocs.id, projectId: billingDocs.projectId,
+      custName: billingDocs.custName, custAddress: billingDocs.custAddress,
+      custPhone: billingDocs.custPhone, custTaxId: billingDocs.custTaxId,
+    })
+      .from(billingDocs).innerJoin(projects, eq(billingDocs.projectId, projects.id))
+      .where(eq(projects.customerId, p.customerId))
+      .orderBy(desc(billingDocs.id)).limit(20),
+  ])
+
+  // ใบของงานนี้มาก่อน แล้วค่อยใบอื่นของลูกค้าคนเดียวกัน (ใหม่→เก่า)
+  const ranked = [...priorDocs].sort(
+    (a, b) => (Number(b.projectId === projectId) - Number(a.projectId === projectId)) || (b.id - a.id),
+  )
+  const remembered = (f: 'custName' | 'custAddress' | 'custPhone' | 'custTaxId') =>
+    ranked.map((d) => d[f]).find((v) => v && v.trim()) || ''
+
   return NextResponse.json({
     custInfo: {
-      name: q?.custName || cust?.name || cust?.chname || '',
-      address: q?.custAddress || cust?.province || '',
-      phone: q?.custPhone || cust?.phone || '',
-      taxId: q?.custTaxId || '',
+      name: remembered('custName') || q?.custName || cust?.name || cust?.chname || '',
+      address: remembered('custAddress') || q?.custAddress || cust?.province || '',
+      phone: remembered('custPhone') || q?.custPhone || cust?.phone || '',
+      taxId: remembered('custTaxId') || q?.custTaxId || '',
     },
   })
 }
