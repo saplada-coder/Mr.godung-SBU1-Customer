@@ -1,16 +1,21 @@
 import { NextResponse } from 'next/server'
+import { eq } from 'drizzle-orm'
 import { getDb } from '@/db'
-import { companySettings } from '@/db/schema'
+import { companySettings, buOffices } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
-import { getSettings } from '@/lib/settings'
-import { isAdminUp } from '@/lib/constants'
+import { getSettings, getBuOffices } from '@/lib/settings'
+import { isAdminUp, BUS } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const me = await getSessionUser()
   if (!me) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  return NextResponse.json({ settings: await getSettings() })
+  const [settings, offices] = await Promise.all([getSettings(), getBuOffices()])
+  return NextResponse.json({
+    settings,
+    offices: offices.map((o) => ({ bu: o.bu, address: o.address, phone: o.phone || '' })),
+  })
 }
 
 export async function PUT(req: Request) {
@@ -42,5 +47,26 @@ export async function PUT(req: Request) {
   }
   const db = getDb()
   await db.insert(companySettings).values({ id: 1, ...values }).onConflictDoUpdate({ target: companySettings.id, set: values })
-  return NextResponse.json({ ok: true, settings: await getSettings() })
+
+  /* ---- ที่อยู่สำนักงานรายภูมิภาค (หัวกระดาษเอกสารของ BU นั้น) ---- */
+  if (Array.isArray(b.offices)) {
+    for (const o of b.offices as Record<string, unknown>[]) {
+      const bu = String(o.bu ?? '')
+      if (!(BUS as readonly string[]).includes(bu)) continue
+      const address = s(o.address, 1000)
+      const phone = s(o.phone, 160)
+      // เว้นที่อยู่ว่าง = ไม่ตั้งสาขาให้ BU นี้ → เอกสารกลับไปใช้ที่อยู่กลาง
+      if (!address) { await db.delete(buOffices).where(eq(buOffices.bu, bu as typeof buOffices.$inferInsert.bu)); continue }
+      const row = { address, phone, updatedAt: new Date(), updatedBy: me.id }
+      await db.insert(buOffices)
+        .values({ bu: bu as typeof buOffices.$inferInsert.bu, ...row })
+        .onConflictDoUpdate({ target: buOffices.bu, set: row })
+    }
+  }
+
+  const [settings, offices] = await Promise.all([getSettings(), getBuOffices()])
+  return NextResponse.json({
+    ok: true, settings,
+    offices: offices.map((o) => ({ bu: o.bu, address: o.address, phone: o.phone || '' })),
+  })
 }

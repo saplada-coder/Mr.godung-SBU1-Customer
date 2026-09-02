@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { getDb } from '@/db'
-import { companySettings } from '@/db/schema'
+import { companySettings, buOffices } from '@/db/schema'
 import { DEFAULT_WARRANTY, DEFAULT_EXCLUSIONS, DEFAULT_OP_FEE_PCT, DEFAULT_PERMIT_DAYS, DEFAULT_BUILD_DAYS } from '@/lib/constants'
 
 export type Settings = Awaited<ReturnType<typeof getSettings>>
@@ -28,6 +28,26 @@ export async function getSettings() {
     portfolio: safeParse(row?.portfolioJson),
   }
 }
+/**
+ * ตั้งค่าบริษัทสำหรับหัวกระดาษของเอกสารที่ออกให้ BU หนึ่ง — บริษัทเดียวกันแต่คนละสาขา
+ * ที่อยู่/เบอร์ของสาขาทับค่ากลาง · bu = null (เช่น PO ของสำนักงาน) หรือยังไม่ตั้งสาขา → ใช้ค่ากลาง
+ */
+export async function getSettingsFor(bu: string | null | undefined) {
+  const base = await getSettings()
+  if (!bu) return base
+  const db = getDb()
+  const [office] = await db.select().from(buOffices)
+    .where(eq(buOffices.bu, bu as typeof buOffices.$inferSelect.bu)).limit(1)
+  if (!office) return base
+  return { ...base, address: office.address || base.address, phone: office.phone || base.phone }
+}
+
+/** ที่อยู่สำนักงานทุกภูมิภาค (สำหรับหน้าตั้งค่า) */
+export async function getBuOffices() {
+  const db = getDb()
+  return db.select().from(buOffices)
+}
+
 function safeParse(s: string | null | undefined): string[] {
   try { const v = JSON.parse(s || '[]'); return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [] } catch { return [] }
 }

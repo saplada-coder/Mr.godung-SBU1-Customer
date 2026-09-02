@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm'
 import { getDb } from '@/db'
 import { quotations, quotationItems, quotationInstallments, customers, users } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
-import { getSettings } from '@/lib/settings'
+import { getSettingsFor } from '@/lib/settings'
 import { quoteTotals, n0 } from '@/lib/biz'
 import { fmtPhone } from '@/lib/format'
 import PrintToolbar from './toolbar'
@@ -26,12 +26,13 @@ export default async function QuotePrintPage({ params }: { params: Promise<{ id:
 
   const [q] = await db.select().from(quotations).where(eq(quotations.id, id)).limit(1)
   if (!q) notFound()
-  const [[cust], items, insts, settings] = await Promise.all([
+  const [[cust], items, insts] = await Promise.all([
     db.select().from(customers).where(eq(customers.id, q.customerId)).limit(1),
     db.select().from(quotationItems).where(eq(quotationItems.quotationId, id)),
     db.select().from(quotationInstallments).where(eq(quotationInstallments.quotationId, id)),
-    getSettings(),
   ])
+  // หัวกระดาษใช้ที่อยู่สำนักงานของภูมิภาคลูกค้า (ปทุมธานี / หาดใหญ่ / ภูเก็ต)
+  const settings = await getSettingsFor(cust?.bu)
   const creator = q.createdBy ? (await db.select().from(users).where(eq(users.id, q.createdBy)).limit(1))[0] : null
   const t = quoteTotals(q, items, [])
   // รูปผลงานท้ายใบ: ที่เลือกไว้เฉพาะใบนี้ก่อน — ยังไม่เคยเลือกใช้คลังจากตั้งค่า

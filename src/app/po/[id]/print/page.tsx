@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm'
 import { getDb } from '@/db'
 import { purchaseOrders, poItems, projects, users } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
-import { getSettings } from '@/lib/settings'
+import { getSettingsFor } from '@/lib/settings'
 import { n0, bahtText } from '@/lib/biz'
 import { fmtPhone } from '@/lib/format'
 import { costCatMeta } from '@/lib/constants'
@@ -26,11 +26,10 @@ export default async function PoPrintPage({ params }: { params: Promise<{ id: st
 
   const [po] = await db.select().from(purchaseOrders).where(eq(purchaseOrders.id, id)).limit(1)
   if (!po) notFound()
-  const [items, settings] = await Promise.all([
-    db.select().from(poItems).where(eq(poItems.poId, id)),
-    getSettings(),
-  ])
+  const items = await db.select().from(poItems).where(eq(poItems.poId, id))
   const p = po.projectId != null ? (await db.select().from(projects).where(eq(projects.id, po.projectId)).limit(1))[0] : null
+  // PO ของสำนักงาน (ไม่ผูกงาน) ไม่มี BU — ใช้ที่อยู่กลางจากตั้งค่าบริษัท
+  const settings = await getSettingsFor(p?.bu)
   const creator = po.createdBy ? (await db.select().from(users).where(eq(users.id, po.createdBy)).limit(1))[0] : null
   const approver = po.approvedBy && po.status === 'อนุมัติแล้ว' ? (await db.select().from(users).where(eq(users.id, po.approvedBy)).limit(1))[0] : null
   const cancelled = po.status === 'ยกเลิก'

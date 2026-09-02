@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm'
 import { getDb } from '@/db'
 import { billingDocs, billingDocItems, billingDocImages, projects, users } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
-import { getSettings } from '@/lib/settings'
+import { getSettingsFor } from '@/lib/settings'
 import { n0, bahtText } from '@/lib/biz'
 import { fmtPhone } from '@/lib/format'
 import { billKindMeta } from '@/lib/constants'
@@ -26,13 +26,14 @@ export default async function BillingPrintPage({ params }: { params: Promise<{ i
 
   const [doc] = await db.select().from(billingDocs).where(eq(billingDocs.id, id)).limit(1)
   if (!doc) notFound()
-  const [[p], items, images, settings] = await Promise.all([
+  const [[p], items, images] = await Promise.all([
     db.select().from(projects).where(eq(projects.id, doc.projectId)).limit(1),
     db.select().from(billingDocItems).where(eq(billingDocItems.docId, id)),
     db.select({ id: billingDocImages.id, url: billingDocImages.url })
       .from(billingDocImages).where(eq(billingDocImages.docId, id)).orderBy(billingDocImages.id),
-    getSettings(),
   ])
+  // หัวกระดาษใช้ที่อยู่สำนักงานของภูมิภาคที่งานนี้สังกัด
+  const settings = await getSettingsFor(p?.bu)
   const creator = doc.createdBy ? (await db.select().from(users).where(eq(users.id, doc.createdBy)).limit(1))[0] : null
   const invoiceRef = doc.invoiceRefId ? (await db.select().from(billingDocs).where(eq(billingDocs.id, doc.invoiceRefId)).limit(1))[0] : null
 

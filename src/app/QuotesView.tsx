@@ -514,13 +514,20 @@ export function CompanySettingsModal({ onClose, showToast }: { onClose: () => vo
   const [f, setFRaw] = useState<Record<string, string>>({})
   const [logo, setLogo] = useState<string | null>(null)
   const [portfolio, setPortfolio] = useState<string[]>([])
+  const [offices, setOffices] = useState<Record<string, { address: string; phone: string }>>({})
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
   const set = (k: string, v: string) => setFRaw((o) => ({ ...o, [k]: v }))
+  const setOffice = (bu: string, k: 'address' | 'phone', v: string) =>
+    setOffices((o) => ({ ...o, [bu]: { ...(o[bu] ?? { address: '', phone: '' }), [k]: v } }))
 
   useEffect(() => {
     fetch('/api/settings', { cache: 'no-store' }).then((r) => r.json()).then((j) => {
       const s = j.settings
+      setOffices(Object.fromEntries(
+        ((j.offices || []) as { bu: string; address: string; phone: string }[])
+          .map((o) => [o.bu, { address: o.address || '', phone: o.phone || '' }]),
+      ))
       setFRaw({
         name: s.name || '', address: s.address || '', phone: s.phone || '', lineId: s.lineId || '', website: s.website || '',
         email: s.email || '', taxId: s.taxId || '', bankPersonal: s.bankPersonal || '', bankCompany: s.bankCompany || '',
@@ -533,7 +540,13 @@ export function CompanySettingsModal({ onClose, showToast }: { onClose: () => vo
 
   const save = async () => {
     setBusy(true)
-    const r = await fetch('/api/settings', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...f, logoUrl: logo, portfolio }) })
+    const r = await fetch('/api/settings', {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        ...f, logoUrl: logo, portfolio,
+        offices: Object.entries(offices).map(([bu, o]) => ({ bu, address: o.address, phone: o.phone })),
+      }),
+    })
     setBusy(false)
     if (r.ok) { showToast('บันทึกตั้งค่าบริษัทแล้ว'); onClose() } else showToast((await r.json()).error || 'บันทึกไม่สำเร็จ')
   }
@@ -560,6 +573,22 @@ export function CompanySettingsModal({ onClose, showToast }: { onClose: () => vo
           <div className="field"><label>เว็บไซต์</label><input value={f.website || ''} onChange={(e) => set('website', e.target.value)} /></div>
           <div className="field"><label>Email</label><input value={f.email || ''} onChange={(e) => set('email', e.target.value)} /></div>
           <div className="field"><label>เลขทะเบียนนิติบุคคล</label><input value={f.taxId || ''} onChange={(e) => set('taxId', e.target.value)} /></div>
+
+          <div className="fs"><div className="fs-t">ที่อยู่สำนักงานรายภูมิภาค</div></div>
+          <div className="field full">
+            <div className="hintline">เอกสารที่ออกให้ภูมิภาคไหน หัวกระดาษจะใช้ที่อยู่ของภูมิภาคนั้น (ใบเสนอราคา · ใบแจ้งหนี้/ใบเสร็จ · ใบสั่งซื้อ) — ชื่อบริษัทกับเลขทะเบียนนิติบุคคลใช้ค่าด้านบนร่วมกันทุกภูมิภาค · <b>เว้นว่าง = ใช้ที่อยู่กลางด้านบน</b></div>
+          </div>
+          {BUS.map((bu) => (
+            <div className="field full" key={bu}>
+              <label>{BU_NAMES[bu]}</label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <input style={{ flex: '3 1 300px' }} value={offices[bu]?.address || ''} placeholder="ที่อยู่สำนักงานของภูมิภาคนี้"
+                  onChange={(e) => setOffice(bu, 'address', e.target.value)} />
+                <input style={{ flex: '1 1 130px' }} value={offices[bu]?.phone || ''} placeholder="โทร."
+                  onChange={(e) => setOffice(bu, 'phone', e.target.value)} />
+              </div>
+            </div>
+          ))}
 
           <div className="fs"><div className="fs-t">ช่องทางการชำระเงิน</div></div>
           <div className="field"><label>นามบุคคล (ไม่รับ VAT)</label><textarea rows={3} value={f.bankPersonal || ''} onChange={(e) => set('bankPersonal', e.target.value)} placeholder={'เลขที่บัญชี : …\nชื่อบัญชี : …\nธนาคาร : …'} /></div>

@@ -96,6 +96,18 @@ export const shortLinks = pgTable('short_links', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+/**
+ * ที่อยู่สำนักงานประจำภูมิภาค — หัวกระดาษของเอกสารใช้ที่อยู่ตาม BU ของงาน
+ * (บริษัทเดียวกัน หลายสาขา: ปทุมธานี / หาดใหญ่ / ภูเก็ต) ไม่มีแถวของ BU ไหน → ใช้ที่อยู่กลางใน company_settings
+ */
+export const buOffices = pgTable('bu_offices', {
+  bu: buEnum('bu').primaryKey(),
+  address: text('address').notNull(),
+  phone: varchar('phone', { length: 160 }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: integer('updated_by').references(() => users.id),
+})
+
 export const buRates = pgTable('bu_rates', {
   bu: buEnum('bu').primaryKey(),
   ratePerSqm: integer('rate_per_sqm').notNull(),
@@ -620,3 +632,4 @@ export type Expense = typeof expenses.$inferSelect
 export type ProjectInstallment = typeof projectInstallments.$inferSelect
 export type ProjectLink = typeof projectLinks.$inferSelect
 export type CompanySettings = typeof companySettings.$inferSelect
+export type BuOffice = typeof buOffices.$inferSelect
