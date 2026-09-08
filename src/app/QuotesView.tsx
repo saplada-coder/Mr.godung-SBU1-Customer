@@ -170,6 +170,8 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToas
   // รูปผลงานแนบท้าย: images = ที่เลือกไว้ของใบนี้ · library = คลังจากตั้งค่าบริษัท
   const [images, setImages] = useState<string[]>([])
   const [library, setLibrary] = useState<string[]>([])
+  // ผู้ดูแลระบบกด "แก้ไขใบนี้" เพื่อปลดล็อกใบที่ส่ง/ตกลงกับลูกค้าไปแล้ว (เฉพาะรอบที่เปิดอยู่)
+  const [unlocked, setUnlocked] = useState(false)
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/quotes/${id}`, { cache: 'no-store' })
@@ -198,7 +200,13 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToas
 
   const admin = isAdminUp(me.role)
   const mine = quote?.createdBy === me.id
-  const canEditDoc = !!quote && canEdit(me.role) && (mine || admin) && quote.status === 'ร่าง'
+  /**
+   * ใบร่างแก้ได้ตามปกติ · ใบที่ส่ง/ตกลงแล้วต้องให้ผู้ดูแลระบบกด "แก้ไขใบนี้" ปลดล็อกก่อน
+   * (แก้ทับเลข QT เดิม ไม่ออก revision — ใบที่ยกเลิก/ถูกแทนที่แล้วแก้ไม่ได้)
+   */
+  const canUnlock = !!quote && admin && ['ส่งลูกค้าแล้ว', 'ลูกค้าตกลง'].includes(quote.status)
+  const canEditDoc = !!quote && canEdit(me.role) && (mine || admin)
+    && (quote.status === 'ร่าง' || (unlocked && canUnlock))
   const seeCosts = quote?.costs != null
 
   const t = calcTotals(items.map((i) => ({ amount: +i.amount || 0 })), +f.opFeePct || 0, +f.discountDesign || 0, +f.discountBuild || 0, f.vat ? 7 : 0)
@@ -234,7 +242,11 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToas
     }
     const r = await fetch(`/api/quotes/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
     setBusy(false)
-    if (r.ok) { if (!silent) showToast('บันทึกแล้ว'); await load(); onChanged(); return true }
+    if (r.ok) {
+      if (!silent) showToast(unlocked ? `บันทึกทับใบ ${quote?.code} แล้ว — อย่าลืมส่งใบใหม่ให้ลูกค้า` : 'บันทึกแล้ว')
+      setUnlocked(false) // ล็อกกลับหลังบันทึก กันแก้ค้างโดยไม่ตั้งใจ
+      await load(); onChanged(); return true
+    }
     showToast((await r.json()).error || 'บันทึกไม่สำเร็จ'); return false
   }
 
@@ -299,6 +311,23 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToas
           )}
           {quote.projectId != null && (
             <div className="field full"><div className="okbox">ใบนี้เปิดงานก่อสร้างแล้ว <button type="button" className="btn btn-sm" onClick={() => { onClose(); onOpenProject(quote.projectId!) }}>เปิดดูงาน →</button></div></div>
+          )}
+          {canUnlock && !unlocked && (
+            <div className="field full">
+              <div className="okbox" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span>ใบนี้{quote.status === 'ลูกค้าตกลง' ? 'ลูกค้าตกลงแล้ว' : 'ส่งลูกค้าไปแล้ว'} — ล็อกไว้กันแก้พลาด</span>
+                <button type="button" className="btn btn-sm" onClick={() => setUnlocked(true)}>✏️ แก้ไขใบนี้</button>
+              </div>
+            </div>
+          )}
+          {unlocked && canUnlock && (
+            <div className="field full">
+              <div className="rejbox">
+                ✏️ <b>กำลังแก้ทับใบเดิม</b> — เลขที่ {quote.code} เหมือนเดิม ไม่ได้ออกฉบับใหม่ · ใบที่ลูกค้าถืออยู่จะไม่ตรงกับของจริง อย่าลืมส่งใบใหม่ให้ลูกค้า
+                {quote.projectId != null && <><br />⚠ ใบนี้เปิดงานก่อสร้างไปแล้ว — <b>งบและงวดเงินของงานถูกคัดลอกไปตอนเปิดงาน จะไม่อัปเดตตาม</b> ต้องไปแก้ในหน้างานเอง</>}
+                <br />ถ้าเป็นการ<b>เปลี่ยนราคาให้ลูกค้า</b> ควรใช้ &quot;แก้ไขเป็นฉบับใหม่ (Revision)&quot; แทน เพื่อเก็บใบเดิมไว้เป็นหลักฐาน
+              </div>
+            </div>
           )}
 
           {/* ---- ข้อมูลลูกค้าบนหัวใบ ---- */}
@@ -480,7 +509,8 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToas
           <button className="btn" onClick={() => window.open(`/quotes/${id}/print`, '_blank')}>🖨 พิมพ์ / PDF</button>
           <span style={{ flex: 1 }} />
           {quote.status === 'ร่าง' && (mine || admin) && <button className="btn" style={{ color: '#b0281c' }} onClick={del}>ลบร่าง</button>}
-          {canEditDoc && <button className="btn" disabled={busy} onClick={() => save()}>{busy ? 'กำลังบันทึก…' : 'บันทึก'}</button>}
+          {canUnlock && !unlocked && <button className="btn" onClick={() => setUnlocked(true)}>✏️ แก้ไขใบนี้</button>}
+          {canEditDoc && <button className={unlocked ? 'btn btn-primary' : 'btn'} disabled={busy} onClick={() => save()}>{busy ? 'กำลังบันทึก…' : 'บันทึก'}</button>}
           {quote.status === 'ร่าง' && <button className="btn btn-primary" disabled={busy} onClick={markSent}>✉ ส่งลูกค้าแล้ว</button>}
           {quote.status === 'ส่งลูกค้าแล้ว' && (
             <>

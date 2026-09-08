@@ -14,8 +14,13 @@ function parseImgs(s: string | null): string[] | null {
 
 export const dynamic = 'force-dynamic'
 
-/** สถานะที่ยังแก้ไขเนื้อหาใบได้ */
+/** สถานะที่ผู้สร้างใบแก้เนื้อหาได้ตามปกติ */
 const EDITABLE = ['ร่าง']
+/**
+ * สถานะที่เจ้าของ/ผู้ดูแลระบบ "ปลดล็อก" แก้ทับในใบเดิมได้ (เลข QT เดิม ไม่ออก revision)
+ * ไว้แก้คำผิด/ที่อยู่/สเปคหลังส่งลูกค้าไปแล้ว — ใบที่ยกเลิกหรือถูกแทนที่แล้วเป็นหลักฐานเก่า ห้ามแก้
+ */
+const ADMIN_UNLOCKABLE = ['ส่งลูกค้าแล้ว', 'ลูกค้าตกลง']
 
 async function loadFull(id: number) {
   const db = getDb()
@@ -105,7 +110,13 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   }
 
   /* ---- save content ---- */
-  if (!EDITABLE.includes(cur.status)) return NextResponse.json({ error: 'ใบที่อนุมัติ/ส่งแล้ว แก้ไขไม่ได้ — กด "แก้ไขเป็นฉบับใหม่ (Revision)"' }, { status: 400 })
+  const unlocked = admin && ADMIN_UNLOCKABLE.includes(cur.status)
+  if (!EDITABLE.includes(cur.status) && !unlocked) {
+    const msg = ADMIN_UNLOCKABLE.includes(cur.status)
+      ? 'ใบที่ส่งลูกค้าแล้ว แก้ได้เฉพาะเจ้าของ/ผู้ดูแลระบบ — หรือกด "แก้ไขเป็นฉบับใหม่ (Revision)"'
+      : 'ใบที่ยกเลิก/ถูกแทนที่แล้ว แก้ไขไม่ได้ — เป็นหลักฐานของฉบับเดิม'
+    return NextResponse.json({ error: msg }, { status: 400 })
+  }
   if (!(mine || admin)) return NextResponse.json({ error: 'แก้ไขได้เฉพาะผู้สร้างใบหรือผู้ดูแลระบบ' }, { status: 403 })
 
   const patch: Record<string, unknown> = { updatedAt: new Date() }
@@ -167,7 +178,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     }))
     if (rows.length) await db.insert(quotationInstallments).values(rows)
   }
-  await log('quote-edit')
+  // แก้ทับใบที่ออกไปแล้วต้องตามรอยได้ว่าใครแก้ ตอนใบอยู่สถานะไหน
+  if (unlocked) await log('quote-edit', 'แก้ทับใบที่ออกแล้ว', cur.status, 'ปลดล็อกโดยผู้ดูแลระบบ')
+  else await log('quote-edit')
   return NextResponse.json({ ok: true })
 }
 
