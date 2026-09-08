@@ -33,7 +33,8 @@ button{font-family:inherit}
 a{color:inherit}
 
 .app{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
-.sidebar{background:var(--sidebar);color:#f3ecec;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;padding:18px 14px;z-index:40;overflow-y:auto;overscroll-behavior:contain}
+.sidebar{background:var(--sidebar);color:#f3ecec;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;padding:18px 14px;z-index:40;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;-ms-overflow-style:none}
+.sidebar::-webkit-scrollbar{display:none}
 .sb-brand{display:flex;flex-direction:column;align-items:center;gap:9px;padding:2px 8px 16px;margin-bottom:8px;border-bottom:1px solid rgba(255,255,255,.09)}
 .sb-logo{width:100%;max-width:148px;aspect-ratio:1;object-fit:cover;border-radius:14px;background:#000}
 .sb-cap{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:rgba(243,236,236,.5);font-weight:700}
