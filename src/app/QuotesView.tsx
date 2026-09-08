@@ -21,13 +21,16 @@ export default function QuotesView({ me, records, limitedData, openQuoteId, onOp
   const [q, setQ] = useState(''); const [fStat, setFStat] = useState(''); const [fBu, setFBu] = useState('')
   const [openId, setOpenId] = useState<number | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  // ถังขยะ: ใบที่ลบแล้ว กู้คืนได้ 30 วัน — สลับดูจากช่องสถานะ
+  const [trash, setTrash] = useState(false)
   const editable = canEdit(me.role)
+  const admin = isAdminUp(me.role)
 
   const load = useCallback(async () => {
-    const r = await fetch('/api/quotes', { cache: 'no-store' })
+    const r = await fetch(`/api/quotes${trash ? '?trash=1' : ''}`, { cache: 'no-store' })
     if (r.ok) setQuotes((await r.json()).quotes)
     else showToast('โหลดใบเสนอราคาไม่สำเร็จ')
-  }, [showToast])
+  }, [showToast, trash])
   useEffect(() => { load() }, [load])
   // เปิดใบที่ส่งต่อมาจากหน้าอื่น (เช่น กดสร้างจากรายชื่อลูกค้า)
   useEffect(() => { if (openQuoteId != null) { setOpenId(openQuoteId); onOpenedQuote?.() } }, [openQuoteId, onOpenedQuote])
@@ -50,6 +53,27 @@ export default function QuotesView({ me, records, limitedData, openQuoteId, onOp
     else showToast(j.error || 'สร้างไม่สำเร็จ')
   }
 
+  /** วันที่เหลือก่อนระบบล้างใบนี้ทิ้งถาวร */
+  const daysLeft = (deletedAt: string) => Math.max(0, 30 - Math.floor((Date.now() - new Date(deletedAt).getTime()) / 864e5))
+
+  const remove = async (x: Quote) => {
+    if (!await uiConfirm(`ลบใบ ${x.code}?\nย้ายเข้าถังขยะ — กู้คืนได้ภายใน 30 วัน`)) return
+    const r = await fetch(`/api/quotes/${x.id}`, { method: 'DELETE' })
+    if (r.ok) { showToast(`ลบ ${x.code} เข้าถังขยะแล้ว — กู้คืนได้ 30 วัน`); await load(); onChanged() }
+    else showToast((await r.json()).error || 'ลบไม่สำเร็จ')
+  }
+  const restore = async (x: Quote) => {
+    const r = await fetch(`/api/quotes/${x.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'restore' }) })
+    if (r.ok) { showToast(`กู้คืน ${x.code} แล้ว`); await load(); onChanged() }
+    else showToast((await r.json()).error || 'กู้คืนไม่สำเร็จ')
+  }
+  const purge = async (x: Quote) => {
+    if (!await uiConfirm(`ล้าง ${x.code} ถาวร?\nลบทิ้งเลย กู้คืนไม่ได้อีก`)) return
+    const r = await fetch(`/api/quotes/${x.id}?hard=1`, { method: 'DELETE' })
+    if (r.ok) { showToast(`ล้าง ${x.code} ถาวรแล้ว`); await load(); onChanged() }
+    else showToast((await r.json()).error || 'ล้างถาวรไม่สำเร็จ')
+  }
+
   if (!quotes) return <div className="empty">กำลังโหลดใบเสนอราคา…</div>
   return (
     <>
@@ -62,10 +86,23 @@ export default function QuotesView({ me, records, limitedData, openQuoteId, onOp
           <svg viewBox="0 0 24 24" fill="none" strokeWidth={2}><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหาเลขที่ / ชื่อลูกค้า / ผู้ทำ…" />
         </div>
-        <select value={fStat} onChange={(e) => setFStat(e.target.value)}><option value="">ทุกสถานะ</option>{QDOC_STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
+        <select value={trash ? '__trash' : fStat}
+          onChange={(e) => {
+            const v = e.target.value
+            if (v === '__trash') { setTrash(true); setFStat('') } else { setTrash(false); setFStat(v) }
+          }}>
+          <option value="">ทุกสถานะ</option>
+          {QDOC_STATUSES.map((s) => <option key={s}>{s}</option>)}
+          <option value="__trash">🗑 ถังขยะ</option>
+        </select>
         <select value={fBu} onChange={(e) => setFBu(e.target.value)}><option value="">ทุก BU</option>{BUS.map((b) => <option key={b} value={b}>{BU_NAMES[b]}</option>)}</select>
         <span className="tcount">{commas(list.length)} ใบ</span>
       </div>
+      {trash && (
+        <div className="hintline" style={{ margin: '0 0 10px' }}>
+          🗑 ถังขยะ — ใบที่ลบแล้ว <b>กู้คืนได้ภายใน 30 วัน</b> ครบกำหนดระบบล้างทิ้งถาวรอัตโนมัติ · ใบในถังขยะไม่นับรวมในรายงานและไม่โผล่ในรายการปกติ
+        </div>
+      )}
       <div className="tscroll">
         <table style={{ minWidth: 900 }}>
           <thead><tr><th>เลขที่</th><th>ลูกค้า</th><th className="r" style={{ textAlign: 'right' }}>ยอดรวมทั้งสิ้น</th><th className="r" style={{ textAlign: 'right' }}>กำไรคาด</th><th>สถานะ</th><th>ผู้ทำ</th><th>วันที่ออก</th><th className="act" /></tr></thead>
@@ -84,13 +121,28 @@ export default function QuotesView({ me, records, limitedData, openQuoteId, onOp
                   <td style={{ fontSize: 12, color: 'var(--text-dim)' }}>{x.creatorName || '—'}</td>
                   <td style={{ fontSize: 12, color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>{x.issueDate ? thDate(x.issueDate) : '—'}</td>
                   <td className="act" style={{ whiteSpace: 'nowrap' }}>
-                    <button className="row-btn" onClick={() => setOpenId(x.id)}>เปิด</button>
-                    <button className="row-btn" style={{ marginLeft: 5 }} onClick={() => window.open(`/quotes/${x.id}/print`, '_blank')}>พิมพ์</button>
+                    {trash ? (
+                      <>
+                        <span style={{ fontSize: 11, color: 'var(--text-faint)', marginRight: 6 }}>
+                          เหลือ {x.deletedAt ? daysLeft(x.deletedAt) : 30} วัน
+                        </span>
+                        {editable && <button className="row-btn" onClick={() => restore(x)}>กู้คืน</button>}
+                        {admin && <button className="row-btn" style={{ marginLeft: 5, color: '#b0281c' }} onClick={() => purge(x)}>ล้างถาวร</button>}
+                      </>
+                    ) : (
+                      <>
+                        <button className="row-btn" onClick={() => setOpenId(x.id)}>เปิด</button>
+                        <button className="row-btn" style={{ marginLeft: 5 }} onClick={() => window.open(`/quotes/${x.id}/print`, '_blank')}>พิมพ์</button>
+                        {editable && (admin || x.createdBy === me.id) && x.projectId == null && (
+                          <button className="row-btn" style={{ marginLeft: 5, color: '#b0281c' }} onClick={() => remove(x)}>ลบ</button>
+                        )}
+                      </>
+                    )}
                   </td>
                 </tr>
               )
             })}
-            {!list.length && <tr><td colSpan={8}><div className="empty">ยังไม่มีใบเสนอราคา — กด &quot;สร้างใบเสนอราคา&quot; เพื่อเริ่ม</div></td></tr>}
+            {!list.length && <tr><td colSpan={8}><div className="empty">{trash ? 'ถังขยะว่าง — ยังไม่มีใบที่ถูกลบ' : 'ยังไม่มีใบเสนอราคา — กด "สร้างใบเสนอราคา" เพื่อเริ่ม'}</div></td></tr>}
           </tbody>
         </table>
       </div>
@@ -261,9 +313,10 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToas
   }
 
   const del = async () => {
-    if (!await uiConfirm('ลบใบร่างนี้ถาวร?')) return
+    if (!await uiConfirm('ลบใบนี้?\nย้ายเข้าถังขยะ — กู้คืนได้ภายใน 30 วัน')) return
     const r = await fetch(`/api/quotes/${id}`, { method: 'DELETE' })
-    if (r.ok) { showToast('ลบแล้ว'); onChanged(); onClose() } else showToast((await r.json()).error || 'ลบไม่สำเร็จ')
+    if (r.ok) { showToast('ลบเข้าถังขยะแล้ว — กู้คืนได้ 30 วันที่ช่องสถานะ → ถังขยะ'); onChanged(); onClose() }
+    else showToast((await r.json()).error || 'ลบไม่สำเร็จ')
   }
   const revise = async () => {
     if (!await uiConfirm('สร้างฉบับแก้ไข (Revision) ใหม่? ใบปัจจุบันจะถูกมาร์กว่า "ถูกแทนที่"')) return
@@ -508,7 +561,7 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToas
         <div className="modal-f" style={{ flexWrap: 'wrap' }}>
           <button className="btn" onClick={() => window.open(`/quotes/${id}/print`, '_blank')}>🖨 พิมพ์ / PDF</button>
           <span style={{ flex: 1 }} />
-          {quote.status === 'ร่าง' && (mine || admin) && <button className="btn" style={{ color: '#b0281c' }} onClick={del}>ลบร่าง</button>}
+          {(mine || admin) && quote.projectId == null && <button className="btn" style={{ color: '#b0281c' }} onClick={del}>🗑 ลบ</button>}
           {canUnlock && !unlocked && <button className="btn" onClick={() => setUnlocked(true)}>✏️ แก้ไขใบนี้</button>}
           {canEditDoc && <button className={unlocked ? 'btn btn-primary' : 'btn'} disabled={busy} onClick={() => save()}>{busy ? 'กำลังบันทึก…' : 'บันทึก'}</button>}
           {quote.status === 'ร่าง' && <button className="btn btn-primary" disabled={busy} onClick={markSent}>✉ ส่งลูกค้าแล้ว</button>}
@@ -531,6 +584,7 @@ function histText(h: HistItem): string {
     'quote-create': 'สร้างใบเสนอราคา', 'quote-edit': 'แก้ไขเนื้อหา', 'quote-submit': 'ส่งขออนุมัติ',
     'quote-approve': 'อนุมัติภายใน ✓', 'quote-reject': 'ตีกลับ', 'quote-send': 'ส่งลูกค้า',
     'quote-accept': 'ลูกค้าตกลง ✓', 'quote-revise': 'สร้าง Revision', 'quote-cancel': 'ยกเลิกใบ', 'project-open': 'เปิดงานก่อสร้าง',
+    'quote-delete': 'ลบเข้าถังขยะ 🗑', 'quote-restore': 'กู้คืนจากถังขยะ ↩',
   }
   const base = map[h.kind] || h.kind
   if (h.kind === 'quote-reject') return `${base}: ${h.newValue || ''}`

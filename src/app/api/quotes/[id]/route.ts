@@ -99,6 +99,13 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       await log('quote-accept', 'วันที่ตอบรับ', undefined, d)
       return NextResponse.json({ ok: true })
     }
+    if (a === 'restore') {
+      if (!(mine || admin)) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+      if (!cur.deletedAt) return NextResponse.json({ error: 'ใบนี้ไม่ได้อยู่ในถังขยะ' }, { status: 400 })
+      await db.update(quotations).set({ deletedAt: null, deletedBy: null, updatedAt: new Date() }).where(eq(quotations.id, id))
+      await log('quote-restore', 'ถังขยะ', 'ลบแล้ว', 'กู้คืน')
+      return NextResponse.json({ ok: true })
+    }
     if (a === 'cancel') {
       if (!(mine || admin)) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
       if (cur.status === 'ลูกค้าตกลง' && cur.projectId) return NextResponse.json({ error: 'ใบนี้เปิดงานก่อสร้างแล้ว ยกเลิกไม่ได้' }, { status: 400 })
@@ -184,7 +191,11 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   return NextResponse.json({ ok: true })
 }
 
-export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+/**
+ * ลบใบเสนอราคา → ย้ายเข้าถังขยะ (ซ่อนจากรายการ กู้คืนได้ 30 วัน แล้วระบบล้างถาวร)
+ * ?hard=1 = ล้างถาวรทันทีจากถังขยะ — เฉพาะเจ้าของ/ผู้ดูแลระบบ
+ */
+export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const me = await getSessionUser()
   if (!me) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const id = Number((await ctx.params).id)
@@ -192,8 +203,25 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
   const [cur] = await db.select().from(quotations).where(eq(quotations.id, id)).limit(1)
   if (!cur) return NextResponse.json({ error: 'not found' }, { status: 404 })
   const mine = cur.createdBy === me.id
-  if (!(isAdminUp(me.role) || (mine && canEdit(me.role)))) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
-  if (cur.status !== 'ร่าง') return NextResponse.json({ error: 'ลบได้เฉพาะใบร่าง' }, { status: 400 })
-  await db.delete(quotations).where(eq(quotations.id, id))
+  const admin = isAdminUp(me.role)
+  if (!(admin || (mine && canEdit(me.role)))) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+
+  const hard = new URL(req.url).searchParams.get('hard') === '1'
+  if (hard) {
+    if (!admin) return NextResponse.json({ error: 'ล้างถาวรได้เฉพาะเจ้าของ/ผู้ดูแลระบบ' }, { status: 403 })
+    if (!cur.deletedAt) return NextResponse.json({ error: 'ต้องย้ายเข้าถังขยะก่อนจึงล้างถาวรได้' }, { status: 400 })
+    await db.delete(quotations).where(eq(quotations.id, id))
+    return NextResponse.json({ ok: true, purged: true })
+  }
+
+  // ใบที่เปิดงานก่อสร้างแล้วเป็นต้นทางของงบและงวดเงินของงาน — ลบไม่ได้
+  if (cur.projectId != null) return NextResponse.json({ error: 'ใบนี้เปิดงานก่อสร้างแล้ว ลบไม่ได้' }, { status: 400 })
+  if (cur.deletedAt) return NextResponse.json({ error: 'ใบนี้อยู่ในถังขยะอยู่แล้ว' }, { status: 400 })
+
+  await db.update(quotations).set({ deletedAt: new Date(), deletedBy: me.id, updatedAt: new Date() }).where(eq(quotations.id, id))
+  await db.insert(activityLog).values({
+    customerId: cur.customerId, quotationId: id, userId: me.id,
+    action: 'quote-delete', field: 'ถังขยะ', oldValue: cur.status, newValue: `ลบเข้าถังขยะ (กู้คืนได้ 30 วัน)`,
+  })
   return NextResponse.json({ ok: true })
 }

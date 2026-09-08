@@ -153,6 +153,7 @@ export function serializeQuote(
     includePortfolio: q.includePortfolio,
     rejectReason: q.rejectReason, sentAt: q.sentAt, supersededById: q.supersededById, projectId: q.projectId,
     createdBy: q.createdBy, createdAt: q.createdAt, updatedAt: q.updatedAt,
+    deletedAt: q.deletedAt,
     customerName: opts.customerName ?? null, customerCode: opts.customerCode ?? null, bu: opts.bu ?? null,
     creatorName: opts.creatorName ?? null,
     items: items.map((i) => ({ id: i.id, seq: i.seq, description: i.description, qty: num(i.qty), unit: i.unit, unitPrice: num(i.unitPrice), amount: n0(i.amount), note: i.note })),

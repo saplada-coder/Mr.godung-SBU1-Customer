@@ -285,8 +285,15 @@ export const quotations = pgTable(
     createdBy: integer('created_by').references(() => users.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    /** ถังขยะ: ลบแล้วซ่อนจากรายการ กู้คืนได้ 30 วัน แล้วระบบล้างทิ้งถาวร (null = ยังไม่ถูกลบ) */
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    deletedBy: integer('deleted_by').references(() => users.id),
   },
-  (t) => [index('quotations_customer_idx').on(t.customerId), index('quotations_status_idx').on(t.status)],
+  (t) => [
+    index('quotations_customer_idx').on(t.customerId),
+    index('quotations_status_idx').on(t.status),
+    index('quotations_deleted_idx').on(t.deletedAt),
+  ],
 )
 
 export const quotationItems = pgTable(

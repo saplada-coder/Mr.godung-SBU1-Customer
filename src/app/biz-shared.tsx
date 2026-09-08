@@ -14,6 +14,8 @@ export type Quote = {
   exclusions: string | null; warranty: string | null; spec: string | null; note: string | null
   includePortfolio: boolean; rejectReason: string | null; sentAt: string | null
   supersededById: number | null; projectId: number | null; createdBy: number | null
+  /** อยู่ในถังขยะตั้งแต่เมื่อไหร่ (null = ปกติ) — ครบ 30 วันระบบล้างทิ้งถาวร */
+  deletedAt: string | null
   customerName: string | null; customerCode: string | null; bu: string | null; creatorName: string | null
   items: QuoteItem[]; installments: QuoteInst[]
   subtotal: number; opFee: number; total: number; vatAmount: number; grand: number

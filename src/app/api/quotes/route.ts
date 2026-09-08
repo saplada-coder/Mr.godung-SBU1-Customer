@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { desc, eq, inArray } from 'drizzle-orm'
+import { desc, eq, inArray, isNull, isNotNull, lt } from 'drizzle-orm'
 import { getDb } from '@/db'
 import { quotations, quotationItems, quotationCosts, quotationInstallments, customers, users, activityLog } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
@@ -10,12 +10,25 @@ import { canEdit, isAdminUp, DEFAULT_INSTALLMENTS, DEFAULT_SPEC } from '@/lib/co
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+/** จำนวนวันที่เก็บใบที่ลบไว้ในถังขยะก่อนล้างถาวร */
+export const TRASH_DAYS = 30
+
+export async function GET(req: Request) {
   const me = await getSessionUser()
   if (!me) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const db = getDb()
+  const trash = new URL(req.url).searchParams.get('trash') === '1'
 
-  const rows = await db.select().from(quotations).orderBy(desc(quotations.id))
+  // ระบบไม่มี cron — ล้างใบที่อยู่ในถังขยะเกิน 30 วันตอนเปิดรายการแทน (best-effort)
+  try {
+    await db.delete(quotations).where(lt(quotations.deletedAt, new Date(Date.now() - TRASH_DAYS * 864e5)))
+  } catch (e) {
+    console.error('purge trashed quotations failed', e)
+  }
+
+  const rows = await db.select().from(quotations)
+    .where(trash ? isNotNull(quotations.deletedAt) : isNull(quotations.deletedAt))
+    .orderBy(desc(quotations.id))
   const ids = rows.map((r) => r.id)
   const [items, costs, insts, custs, allUsers] = await Promise.all([
     ids.length ? db.select().from(quotationItems).where(inArray(quotationItems.quotationId, ids)) : Promise.resolve([]),
