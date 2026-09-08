@@ -6,7 +6,7 @@ import { getSessionUser } from '@/lib/auth'
 import { getRates } from '@/lib/rates'
 import { getSettings } from '@/lib/settings'
 import { genDocCode, serializeQuote, today } from '@/lib/biz'
-import { canEdit, isAdminUp, DEFAULT_INSTALLMENTS } from '@/lib/constants'
+import { canEdit, isAdminUp, DEFAULT_INSTALLMENTS, DEFAULT_SPEC } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
@@ -70,7 +70,7 @@ export async function POST(req: Request) {
     vatPct: '0',
     permitDays: settings.permitDays, buildDays: settings.buildDays,
     exclusions: settings.exclusionsText, warranty: settings.warrantyText,
-    spec: 'SPEC : ส่วนโกดัง\n\nฐานราก\n- เสาเข็มโดยวิศวะกรออกแบบ\n\nโครงเหล็ก\n- ตามแบบที่แนบไว้\n\nหลังคาและผนัง\n- หลังคา เมทัลชีท 0.35 มม. บลูสโคป สีเลือกภายหลัง\n- ก่ออิฐบล็อก 3 เมตร\n\nระบบไฟฟ้าภายในแสงสว่าง 3 เฟส',
+    spec: DEFAULT_SPEC,
     createdBy: me.id,
   }).returning()
 
