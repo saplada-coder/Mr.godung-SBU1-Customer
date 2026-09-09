@@ -131,6 +131,16 @@ export const QDOCS = [
 export const QDOC_STATUSES: string[] = QDOCS.map((q) => q.k)
 export const qdocMeta = (s: string) => QDOCS.find((x) => x.k === s) ?? QDOCS[0]
 
+/** สถานะสัญญาว่าจ้างรับเหมาก่อสร้าง + สี */
+export const CONTRACT_DOCS = [
+  { k: 'ร่าง', c: '#5f6b76', b: '#e9ebee' },
+  { k: 'ลงนามแล้ว', c: '#3f8f3a', b: '#dcedd2' },
+  { k: 'ยกเลิก', c: '#b0281c', b: '#f4dbd7' },
+] as const
+export const CONTRACT_STATUSES: string[] = CONTRACT_DOCS.map((x) => x.k)
+export type ContractStatus = (typeof CONTRACT_DOCS)[number]['k']
+export const contractMeta = (s: string) => CONTRACT_DOCS.find((x) => x.k === s) ?? CONTRACT_DOCS[0]
+
 /** สถานะงานก่อสร้าง + สี */
 export const PROJECT_STAGES = [
   { k: 'กำลังก่อสร้าง', c: '#2563c9', b: '#d9e8fb' },

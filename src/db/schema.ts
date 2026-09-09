@@ -12,6 +12,7 @@ import {
   index,
 } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
+import type { ContractStatus } from '@/lib/constants'
 
 /* ---- Enums (สั้น/ASCII พอที่จะเป็น pg enum ได้) ---- */
 export const buEnum = pgEnum('bu', ['BU1', 'BU2', 'BU3', 'BU4', 'BU5', 'BU6', 'BU7'])
@@ -342,6 +343,70 @@ export const quotationInstallments = pgTable(
   (t) => [index('qinst_quotation_idx').on(t.quotationId)],
 )
 
+/**
+ * สัญญาว่าจ้างรับเหมาก่อสร้าง — ร่างจากใบเสนอราคาที่ลูกค้าตกลง ใบละหนึ่งฉบับ
+ * เนื้อหาส่วนใหญ่ตั้งต้นจากใบเสนอราคา (มูลค่า งวดงาน สเปค งานที่ไม่รวม การรับประกัน)
+ * แล้วแก้ทับได้ในสัญญาโดยไม่ย้อนไปแตะใบเสนอราคาซึ่งส่งลูกค้าไปแล้ว
+ * เลขที่สัญญาใช้รหัสลูกค้า (เช่น BU1-20260909-002) ตามฟอร์มสัญญาจริงของบริษัท
+ */
+export const contracts = pgTable(
+  'contracts',
+  {
+    id: serial('id').primaryKey(),
+    quotationId: integer('quotation_id').notNull().unique().references(() => quotations.id, { onDelete: 'cascade' }),
+    customerId: integer('customer_id').notNull().references(() => customers.id, { onDelete: 'cascade' }),
+    code: varchar('code', { length: 40 }).notNull(),
+    status: varchar('status', { length: 20 }).$type<ContractStatus>().notNull().default('ร่าง'),
+    /** หัวสัญญา: ชื่อโครงการ + ที่ตั้งหน้างาน (ตำบล/อำเภอ/จังหวัด) — ใบเสนอราคาไม่มีเก็บไว้ */
+    projectName: varchar('project_name', { length: 200 }),
+    siteAddress: text('site_address'),
+    /** ผู้มีอำนาจลงนามฝ่ายผู้รับจ้าง เช่น นายวิเจน แก้วมณี */
+    contractorSigner: varchar('contractor_signer', { length: 120 }),
+    /** มูลค่าสัญญา (Lump Sum) ก่อน VAT */
+    contractAmount: numeric('contract_amount', { precision: 14, scale: 2 }).notNull(),
+    vatPct: numeric('vat_pct', { precision: 5, scale: 2 }),
+    /** ภาษีหัก ณ ที่จ่าย — 0 = ไม่หัก (ตามฟอร์มสัญญาข้อ 6.2) */
+    whtPct: numeric('wht_pct', { precision: 5, scale: 2 }),
+    buildDays: integer('build_days'),
+    extendDays: integer('extend_days'),
+    startWithinDays: integer('start_within_days'),
+    payWithinDays: integer('pay_within_days'),
+    penaltyPerDay: numeric('penalty_per_day', { precision: 12, scale: 2 }),
+    workHours: varchar('work_hours', { length: 60 }),
+    warrantyYears: integer('warranty_years'),
+    /** ขนาดอาคาร เช่น 11.34*24.96 + พื้นที่ใช้สอย ตร.ม. */
+    buildingSize: varchar('building_size', { length: 60 }),
+    buildingSqm: numeric('building_sqm', { precision: 12, scale: 2 }),
+    /** ข้อ 1.1.3 งานที่รวม · 1.1.4 งานที่ไม่รวม · ข้อ 7 การรับประกัน */
+    scopeIncluded: text('scope_included'),
+    scopeExcluded: text('scope_excluded'),
+    warrantyText: text('warranty_text'),
+    note: text('note'),
+    signDate: date('sign_date'),
+    dueDate: date('due_date'),
+    createdBy: integer('created_by').references(() => users.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('contracts_customer_idx').on(t.customerId)],
+)
+
+/** งวดงานในสัญญา (ข้อ 6) — ตั้งต้นจากงวดของใบเสนอราคา แล้วแก้แยกได้ */
+export const contractInstallments = pgTable(
+  'contract_installments',
+  {
+    id: serial('id').primaryKey(),
+    contractId: integer('contract_id').notNull().references(() => contracts.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    title: varchar('title', { length: 200 }).notNull(),
+    amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
+    /** งวดย่อยแบบ "วัสดุเข้างาน / ติดตั้งเสร็จ" — JSON [{title, amount}] (null = ไม่แตกงวดย่อย) */
+    subsJson: text('subs_json'),
+    note: text('note'),
+  },
+  (t) => [index('cinst_contract_idx').on(t.contractId)],
+)
+
 /** งานก่อสร้าง — เปิดจากใบเสนอราคาที่ลูกค้าตกลง */
 export const projects = pgTable(
   'projects',
@@ -356,6 +421,9 @@ export const projects = pgTable(
     contractAmount: numeric('contract_amount', { precision: 14, scale: 2 }).notNull(),
     vatPct: numeric('vat_pct', { precision: 5, scale: 2 }),
     status: varchar('status', { length: 30 }).notNull().default('กำลังก่อสร้าง'),
+    /** ถังขยะ: ลบแล้วซ่อนจากรายการและยอดรวม กู้คืนได้ 30 วัน แล้วระบบล้างทิ้งถาวร (null = ยังไม่ถูกลบ) */
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    deletedBy: integer('deleted_by').references(() => users.id),
     startDate: date('start_date'),
     dueDate: date('due_date'),
     closedAt: date('closed_at'),
