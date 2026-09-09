@@ -289,6 +289,7 @@ export const PRINT_CSS = `
 .qprint .ptoolbar .pmsg.err{background:#ffe2e0;color:#8f2018}
 .qprint .ptoolbar .pshare{background:#fff;color:#111;border-radius:11px;padding:11px 12px;width:330px;font-size:12.5px;line-height:1.5;text-align:left;display:flex;flex-direction:column;gap:8px;box-shadow:0 2px 12px rgba(0,0,0,.35)}
 .qprint .ptoolbar .pshare textarea{width:100%;height:92px;font:inherit;font-size:12px;color:#111;background:#f7f7f7;border:1px solid #ccc;border-radius:7px;padding:7px;resize:none}
+.qprint .ptoolbar .pshare ol.psteps{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:5px}
 .qprint .ptoolbar .pshare .row{display:flex;gap:6px;flex-wrap:wrap}
 .qprint .ptoolbar .pshare button{padding:7px 11px;font-size:12.5px;border-radius:7px}
 @media print{

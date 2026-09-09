@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { randomBytes } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { getDb } from '@/db'
 import { quotations, customers, activityLog } from '@/db/schema'
@@ -8,9 +7,6 @@ import { today } from '@/lib/biz'
 import { canEdit } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
-
-/** โทเคน 16 ตัวอักษรจาก crypto — เดาไม่ได้ ผู้ที่ไม่มีลิงก์เปิดใบไม่เจอ */
-const mintToken = () => randomBytes(12).toString('base64url').slice(0, 16)
 
 /** คำนำหน้าที่มีอยู่แล้ว/ชื่อนิติบุคคล — เติม "คุณ" ทับจะอ่านแปลก เช่น "คุณบริษัท พีดี อควา" */
 const TITLED = /^(คุณ|นาย|นาง|นางสาว|น\.ส\.|ดร\.|บริษัท|บจก|บมจ|หจก|ห\.จ\.ก|ร้าน|Mr|Mrs|Ms|Dr)/i
@@ -21,11 +17,11 @@ const khun = (name: string) => {
 }
 
 /**
- * ขอลิงก์สาธารณะของใบเสนอราคาเพื่อส่งให้ลูกค้า (ปุ่ม "ส่งไลน์" บนหน้าพิมพ์)
- * ใบหนึ่งมีโทเคนเดียวตลอด — กดซ้ำได้ลิงก์เดิม ลูกค้าที่เคยรับไปแล้วจึงยังเปิดได้
- * ใบร่างที่แชร์ครั้งแรกถือว่าส่งลูกค้าแล้ว เลื่อนสถานะให้เหมือนกดปุ่ม "ส่งลูกค้า"
+ * เตรียมส่งใบเสนอราคาให้ลูกค้าทางไลน์ (ปุ่ม "ส่งไลน์" บนหน้าพิมพ์)
+ * ตัวใบไปเป็นไฟล์ PDF ที่พนักงานบันทึกจากหน้าพิมพ์แล้วแนบในแชทเอง — ไลน์ส่วนตัวไม่มี API ให้ส่งไฟล์แทนได้
+ * ที่นี่จึงทำสองอย่าง: เลื่อนสถานะใบร่างเป็น "ส่งลูกค้าแล้ว" และคืนข้อความสำเร็จรูปให้ไปวางในแชท
  */
-export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const me = await getSessionUser()
   if (!me) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   if (!canEdit(me.role)) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
@@ -35,12 +31,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (!q) return NextResponse.json({ error: 'not found' }, { status: 404 })
   if (q.deletedAt) return NextResponse.json({ error: 'ใบนี้อยู่ในถังขยะ กู้คืนก่อนถึงจะส่งได้' }, { status: 400 })
   if (q.status === 'ยกเลิก') return NextResponse.json({ error: 'ใบนี้ยกเลิกแล้ว ส่งให้ลูกค้าไม่ได้' }, { status: 400 })
-
-  let token = q.shareToken
-  if (!token) {
-    token = mintToken()
-    await db.update(quotations).set({ shareToken: token, updatedAt: new Date() }).where(eq(quotations.id, id))
-  }
 
   // ใบร่างที่เพิ่งส่งออกครั้งแรก → เลื่อนสถานะเหมือนกดปุ่ม "ส่งลูกค้า"
   if (q.status === 'ร่าง') {
@@ -53,18 +43,16 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   }
   await db.insert(activityLog).values({
     customerId: q.customerId, quotationId: id, userId: me.id,
-    action: 'quote-share', field: 'ลิงก์ไลน์', newValue: `แชร์ลิงก์ใบ ${q.code}`,
+    action: 'quote-share', field: 'ส่งไลน์', newValue: `ส่งใบ ${q.code} ให้ลูกค้าทางไลน์`,
   })
 
   const [cust] = await db.select().from(customers).where(eq(customers.id, q.customerId)).limit(1)
-  const origin = req.headers.get('origin') || new URL(req.url).origin
-  const url = `${origin}/q/${token}`
   const text = [
     `ใบเสนอราคา ${q.code}${q.rev > 1 ? ` (Rev.${q.rev})` : ''}`,
     `ลูกค้า: ${khun(q.custName || cust?.name || cust?.chname || '-')}`,
     '',
-    `เปิดดู / บันทึก PDF: ${url}`,
+    'รายละเอียดตามไฟล์ PDF ที่แนบมาค่ะ',
   ].join('\n')
 
-  return NextResponse.json({ ok: true, url, text, code: q.code })
+  return NextResponse.json({ ok: true, text, code: q.code })
 }
