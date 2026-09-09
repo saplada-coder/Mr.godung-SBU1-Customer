@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { and, desc, eq } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import { getDb } from '@/db'
 import { projects, projectBudgets, projectInstallments, projectLinks, expenses, customers, users, activityLog, billingDocs, quotations } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
@@ -77,6 +77,16 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const log = (action: string, field?: string, oldValue?: string, newValue?: string) =>
     db.insert(activityLog).values({ customerId: cur.customerId, projectId: id, userId: me.id, action, field, oldValue, newValue })
 
+  /* ---- ถังขยะ: กู้คืนก่อน จึงจะทำอย่างอื่นกับงานนี้ได้ ---- */
+  if (b.action === 'restore') {
+    if (!isAdminUp(me.role)) return NextResponse.json({ error: 'เฉพาะเจ้าของ/ผู้ดูแลระบบที่กู้คืนงานได้' }, { status: 403 })
+    if (!cur.deletedAt) return NextResponse.json({ error: 'งานนี้ไม่ได้อยู่ในถังขยะ' }, { status: 400 })
+    await db.update(projects).set({ deletedAt: null, deletedBy: null, updatedAt: new Date() }).where(eq(projects.id, id))
+    await log('project-restore', 'ถังขยะ', 'ลบแล้ว', 'กู้คืน')
+    return NextResponse.json({ ok: true })
+  }
+  if (cur.deletedAt) return NextResponse.json({ error: 'งานนี้อยู่ในถังขยะ — กู้คืนก่อนจึงแก้ไขได้' }, { status: 400 })
+
   /* ---- ปิดงาน / เปิดกลับ ---- */
   if (b.action === 'close') {
     if (!canApprove(me.role)) return NextResponse.json({ error: 'เฉพาะเจ้าของ/ผู้ดูแลระบบที่ปิดงานได้' }, { status: 403 })
@@ -147,35 +157,41 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 }
 
 /**
- * ลบงานก่อสร้าง — ใช้กับงานที่เปิดผิด/เปิดซ้ำเท่านั้น
- * ลบแล้ว งบรายหมวด งวดงาน ค่าใช้จ่าย และลิงก์เอกสารของงานนี้หายตามทั้งหมด (cascade)
- * จึงกันไว้ทุกงานที่มีร่องรอยการเงินแล้ว — เอกสารการเงินยกเลิกได้แต่ลบไม่ได้ เพราะเลขรันต้องต่อเนื่อง
+ * ลบงานก่อสร้าง → ย้ายเข้าถังขยะ (ซ่อนจากรายการและยอดรวม กู้คืนได้ 30 วัน แล้วระบบล้างถาวร)
+ * ข้อมูลทุกอย่างยังอยู่ครบระหว่างอยู่ในถังขยะ จึงลบงานที่มีเงินเข้าแล้วได้โดยไม่เสียหลักฐาน
+ * ?hard=1 = ล้างถาวรทันทีจากถังขยะ — งบรายหมวด งวดงาน ค่าใช้จ่าย และลิงก์เอกสารหายตามทั้งหมด (cascade)
  */
-export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const me = await getSessionUser()
   if (!me) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   if (!isAdminUp(me.role)) return NextResponse.json({ error: 'เฉพาะเจ้าของ/ผู้ดูแลระบบที่ลบงานได้' }, { status: 403 })
   const id = Number((await ctx.params).id)
+  const hard = new URL(req.url).searchParams.get('hard') === '1'
   const db = getDb()
   const [cur] = await db.select().from(projects).where(eq(projects.id, id)).limit(1)
   if (!cur) return NextResponse.json({ error: 'not found' }, { status: 404 })
 
-  const [bill] = await db.select({ id: billingDocs.id }).from(billingDocs).where(eq(billingDocs.projectId, id)).limit(1)
-  if (bill) return NextResponse.json({ error: 'ลบไม่ได้ — งานนี้ออกเอกสารการเงินไปแล้ว' }, { status: 400 })
-  const [paid] = await db.select({ id: projectInstallments.id }).from(projectInstallments)
-    .where(and(eq(projectInstallments.projectId, id), eq(projectInstallments.payStatus, 'รับเงินแล้ว'))).limit(1)
-  if (paid) return NextResponse.json({ error: 'ลบไม่ได้ — งานนี้มีงวดที่รับเงินแล้ว' }, { status: 400 })
-  const [exp] = await db.select({ id: expenses.id }).from(expenses).where(eq(expenses.projectId, id)).limit(1)
-  if (exp) return NextResponse.json({ error: 'ลบไม่ได้ — งานนี้มีค่าใช้จ่ายบันทึกไว้ ลบค่าใช้จ่ายออกก่อน' }, { status: 400 })
+  if (hard) {
+    if (!cur.deletedAt) return NextResponse.json({ error: 'ต้องย้ายเข้าถังขยะก่อนจึงล้างถาวรได้' }, { status: 400 })
+    // เอกสารการเงินอ้างงานนี้อยู่ — ยกเลิกได้แต่ลบไม่ได้ เพราะเลขรันต้องต่อเนื่อง จึงล้างงานถาวรไม่ได้เช่นกัน
+    const [bill] = await db.select({ id: billingDocs.id }).from(billingDocs).where(eq(billingDocs.projectId, id)).limit(1)
+    if (bill) return NextResponse.json({ error: 'ล้างถาวรไม่ได้ — งานนี้ออกเอกสารการเงินไปแล้ว เก็บไว้ในถังขยะได้แต่ลบทิ้งถาวรไม่ได้' }, { status: 400 })
+    // ใบเสนอราคาต้นทางต้องกลับไปเป็น "ยังไม่เปิดงาน" ไม่งั้นจะค้างชี้งานที่ถูกลบไปแล้ว
+    if (cur.quotationId)
+      await db.update(quotations).set({ projectId: null, updatedAt: new Date() }).where(eq(quotations.id, cur.quotationId))
+    await db.insert(activityLog).values({
+      customerId: cur.customerId, userId: me.id, action: 'project-purge',
+      field: 'งานก่อสร้าง', oldValue: cur.code, newValue: `ล้างงาน ${cur.code} (${cur.name}) ถาวร`,
+    })
+    await db.delete(projects).where(eq(projects.id, id))
+    return NextResponse.json({ ok: true, purged: true })
+  }
 
-  // ใบเสนอราคาต้นทางต้องกลับไปเป็น "ยังไม่เปิดงาน" ไม่งั้นจะค้างชี้งานที่ถูกลบไปแล้ว
-  if (cur.quotationId)
-    await db.update(quotations).set({ projectId: null, updatedAt: new Date() }).where(eq(quotations.id, cur.quotationId))
-
+  if (cur.deletedAt) return NextResponse.json({ error: 'งานนี้อยู่ในถังขยะอยู่แล้ว' }, { status: 400 })
+  await db.update(projects).set({ deletedAt: new Date(), deletedBy: me.id, updatedAt: new Date() }).where(eq(projects.id, id))
   await db.insert(activityLog).values({
-    customerId: cur.customerId, userId: me.id, action: 'project-delete',
-    field: 'งานก่อสร้าง', oldValue: cur.code, newValue: `ลบงาน ${cur.code} (${cur.name})`,
+    customerId: cur.customerId, projectId: id, userId: me.id, action: 'project-delete',
+    field: 'ถังขยะ', oldValue: cur.status, newValue: `ลบงาน ${cur.code} เข้าถังขยะ (กู้คืนได้ 30 วัน)`,
   })
-  await db.delete(projects).where(eq(projects.id, id))
   return NextResponse.json({ ok: true })
 }

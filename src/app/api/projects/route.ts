@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { desc, eq, inArray } from 'drizzle-orm'
+import { desc, eq, inArray, isNotNull, isNull, lt } from 'drizzle-orm'
 import { getDb } from '@/db'
 import { projects, projectBudgets, projectInstallments, expenses, customers, activityLog } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
@@ -8,13 +8,29 @@ import { canApprove, ST_WON } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
-/** รายการงานก่อสร้างทั้งหมด + ยอดสรุปต่อโครงการ (งบ / จ่ายจริงอนุมัติแล้ว / รออนุมัติ / รับเงินแล้ว) */
-export async function GET() {
+/** จำนวนวันที่เก็บงานที่ลบไว้ในถังขยะก่อนล้างถาวร */
+const TRASH_DAYS = 30
+
+/**
+ * รายการงานก่อสร้างทั้งหมด + ยอดสรุปต่อโครงการ (งบ / จ่ายจริงอนุมัติแล้ว / รออนุมัติ / รับเงินแล้ว)
+ * ?trash=1 = ดูเฉพาะงานที่อยู่ในถังขยะ · ปกติงานในถังขยะไม่โผล่และไม่นับในยอดรวม
+ */
+export async function GET(req: Request) {
   const me = await getSessionUser()
   if (!me) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const db = getDb()
+  const trash = new URL(req.url).searchParams.get('trash') === '1'
 
-  const rows = await db.select().from(projects).orderBy(desc(projects.id))
+  // ระบบไม่มี cron — ล้างงานที่อยู่ในถังขยะเกิน 30 วันตอนเปิดรายการแทน (best-effort)
+  try {
+    await db.delete(projects).where(lt(projects.deletedAt, new Date(Date.now() - TRASH_DAYS * 864e5)))
+  } catch (e) {
+    console.error('purge trashed projects failed', e)
+  }
+
+  const rows = await db.select().from(projects)
+    .where(trash ? isNotNull(projects.deletedAt) : isNull(projects.deletedAt))
+    .orderBy(desc(projects.id))
   const ids = rows.map((r) => r.id)
   const [budgets, exps, insts, custs] = await Promise.all([
     ids.length ? db.select().from(projectBudgets).where(inArray(projectBudgets.projectId, ids)) : Promise.resolve([]),
@@ -40,7 +56,7 @@ export async function GET() {
       startDate: p.startDate, dueDate: p.dueDate, closedAt: p.closedAt,
       budgetTotal, spent, pendingAmount, pendingCount: exp.filter((x) => x.status === 'รออนุมัติ').length,
       received, instDone: ins.filter((x) => x.workStatus === 'ส่งมอบแล้ว').length, instTotal: ins.length,
-      profit: received - spent,
+      profit: received - spent, deletedAt: p.deletedAt,
     }
   })
   return NextResponse.json({ projects: list })

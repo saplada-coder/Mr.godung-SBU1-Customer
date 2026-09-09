@@ -26,6 +26,8 @@ export type ProjectRow = {
   contractAmount: number; status: string; startDate: string | null; dueDate: string | null; closedAt: string | null
   budgetTotal: number; spent: number; pendingAmount: number; pendingCount: number
   received: number; instDone: number; instTotal: number; profit: number
+  /** อยู่ในถังขยะตั้งแต่เมื่อไร (null = งานปกติ) */
+  deletedAt?: string | null
 }
 export type ExpenseRow = {
   id: number; category: string; description: string; vendor: string | null; amount: number
@@ -78,7 +80,7 @@ export async function fileToDataUrl(file: File, maxW = 1400, quality = 0.82): Pr
  * จึงสร้างกล่องเองด้วย DOM ตรงๆ — ใช้ CSS class เดิมของแอป ทำงานได้ทุกสภาพแวดล้อม */
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
 
-function domDialog(message: string, withInput: boolean): Promise<string | boolean | null> {
+function domDialog(message: string, withInput: boolean, alertOnly = false): Promise<string | boolean | null> {
   return new Promise((resolve) => {
     const bd = document.createElement('div')
     bd.className = 'modal-bd'
@@ -90,15 +92,16 @@ function domDialog(message: string, withInput: boolean): Promise<string | boolea
           ${withInput ? '<div class="field full"><input /></div>' : ''}
         </div>
         <div class="modal-f">
-          <button type="button" class="btn" data-a="cancel">ยกเลิก</button>
+          ${alertOnly ? '' : '<button type="button" class="btn" data-a="cancel">ยกเลิก</button>'}
           <button type="button" class="btn btn-primary" data-a="ok">ตกลง</button>
         </div>
       </div>`
     const input = bd.querySelector('input')
     const done = (v: string | boolean | null) => { bd.remove(); resolve(v) }
-    bd.querySelector('[data-a="cancel"]')!.addEventListener('click', () => done(withInput ? null : false))
+    bd.querySelector('[data-a="cancel"]')?.addEventListener('click', () => done(withInput ? null : false))
     bd.querySelector('[data-a="ok"]')!.addEventListener('click', () => done(withInput ? input?.value ?? '' : true))
-    bd.addEventListener('click', (e) => { if (e.target === bd) done(withInput ? null : false) })
+    // กล่องแจ้งเตือนปิดด้วยการคลิกนอกกล่องได้ ถือว่ารับทราบแล้ว
+    bd.addEventListener('click', (e) => { if (e.target === bd) done(alertOnly ? true : withInput ? null : false) })
     input?.addEventListener('keydown', (e) => { if (e.key === 'Enter') done(input.value) })
     document.body.appendChild(bd)
     input?.focus()
@@ -108,6 +111,8 @@ function domDialog(message: string, withInput: boolean): Promise<string | boolea
 export const uiConfirm = (message: string) => domDialog(message, false) as Promise<boolean>
 /** ใช้แทน window.prompt ทุกจุด — คืน null เมื่อกดยกเลิก */
 export const uiPrompt = (message: string) => domDialog(message, true) as Promise<string | null>
+/** แจ้งเหตุผลที่ทำรายการไม่สำเร็จ — ใช้แทน toast ตรงที่พลาดอ่านไม่ได้ */
+export const uiAlert = (message: string) => domDialog(message, false, true) as Promise<boolean>
 
 /** ตัวเลือกไฟล์รูป + บีบอัด แล้วส่ง data URL กลับ */
 export function pickImage(onPicked: (dataUrl: string) => void, onError?: (m: string) => void) {

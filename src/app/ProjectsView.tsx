@@ -6,7 +6,7 @@ import {
   INST_WORK, INST_PAY, PROJECT_STATUSES, BILL_KINDS, billKindMeta, PAY_METHODS, canEdit, isAdminUp, type Role,
 } from '@/lib/constants'
 import { commas, fmtB, thDate } from '@/lib/format'
-import { bizGroupedBars, bizProjectBars, bizSCurve, cumulative, pickImage, uiConfirm, uiPrompt, type ProjectRow, type ExpenseRow, type InstRow, type HistItem } from './biz-shared'
+import { bizGroupedBars, bizProjectBars, bizSCurve, cumulative, pickImage, uiAlert, uiConfirm, uiPrompt, type ProjectRow, type ExpenseRow, type InstRow, type HistItem } from './biz-shared'
 
 type Me = { id: number; email: string; name: string | null; image: string | null; role: Role; bu: string | null }
 type Cust = { id: number; code: string; bu: string; name: string | null; chname: string | null; province: string | null; status: string; shownVal: number | null; d: string | null; isFinal: boolean }
@@ -25,24 +25,50 @@ export default function ProjectsView({ me, records, limitedData, showToast, onCh
   const [openId, setOpenId] = useState<number | null>(null)
   const [newOpen, setNewOpen] = useState(false)
   const [fStat, setFStat] = useState(''); const [fBu, setFBu] = useState('')
+  // ถังขยะ: งานที่ลบแล้ว กู้คืนได้ 30 วัน — สลับดูจากช่องสถานะ
+  const [trash, setTrash] = useState(false)
 
   const load = useCallback(async () => {
-    const r = await fetch('/api/projects', { cache: 'no-store' })
+    const r = await fetch(`/api/projects${trash ? '?trash=1' : ''}`, { cache: 'no-store' })
     if (r.ok) setProjects((await r.json()).projects)
     else showToast('โหลดรายการงานไม่สำเร็จ')
-  }, [showToast])
+  }, [showToast, trash])
   useEffect(() => { load() }, [load])
   // เปิดงานที่ส่งต่อมาจากหน้าใบเสนอราคา (หลังกด "เปิดงานก่อสร้าง")
   useEffect(() => { if (openProjectId != null) { setOpenId(openProjectId); onOpenedProject() } }, [openProjectId, onOpenedProject])
 
   const list = useMemo(() => (projects || []).filter((p) => (!fStat || p.status === fStat) && (!fBu || p.bu === fBu)), [projects, fStat, fBu])
 
-  /** ลบงานที่เปิดผิด/เปิดซ้ำ — ฝั่งเซิร์ฟเวอร์กันงานที่มีเอกสารการเงิน งวดรับเงินแล้ว หรือค่าใช้จ่ายไว้อีกชั้น */
+  const daysLeft = (deletedAt: string) => Math.max(0, 30 - Math.floor((Date.now() - new Date(deletedAt).getTime()) / 864e5))
+
+  /**
+   * เรียก API ของงานหนึ่งแล้วรีเฟรชรายการ — เหตุผลที่ทำไม่สำเร็จขึ้นเป็นกล่อง ไม่ใช่ toast
+   * ที่ผ่านมาข้อความไปโผล่เป็น toast ที่หายเร็ว คนกดเลยเห็นว่า "ไม่มีอะไรเกิดขึ้น"
+   */
+  const call = async (p: ProjectRow, what: string, req: () => Promise<Response>, okMsg: string) => {
+    try {
+      const r = await req()
+      if (r.ok) { showToast(okMsg); await load(); onChanged(); return }
+      // เซิร์ฟเวอร์อาจตอบหน้า error ที่ไม่ใช่ JSON (เช่น 500) — กันไว้ ไม่งั้น .json() จะ throw แล้วเงียบไปทั้งอัน
+      const j = await r.json().catch(() => ({} as { error?: string }))
+      await uiAlert(`${what}งาน ${p.code} ไม่ได้\n\n${j.error || `เซิร์ฟเวอร์ตอบกลับ ${r.status}`}`)
+    } catch {
+      await uiAlert(`${what}งาน ${p.code} ไม่ได้\n\nเชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ ลองใหม่อีกครั้ง`)
+    }
+  }
+
+  /** ลบงาน → ย้ายเข้าถังขยะ ข้อมูลยังอยู่ครบ กู้คืนได้ 30 วัน */
   const remove = async (p: ProjectRow) => {
-    if (!await uiConfirm(`ลบงาน ${p.code}?\n"${p.name}"\n\nงบประมาณ งวดงาน และลิงก์เอกสารของงานนี้จะถูกลบไปด้วย — กู้คืนไม่ได้`)) return
-    const r = await fetch(`/api/projects/${p.id}`, { method: 'DELETE' })
-    if (r.ok) { showToast(`ลบงาน ${p.code} แล้ว`); await load(); onChanged() }
-    else showToast((await r.json()).error || 'ลบไม่สำเร็จ')
+    if (!await uiConfirm(`ลบงาน ${p.code}?\n"${p.name}"\n\nย้ายเข้าถังขยะ — งานจะหายจากรายการและยอดรวมทั้งหมด แต่ข้อมูลยังอยู่ครบ กู้คืนได้ภายใน 30 วัน`)) return
+    await call(p, 'ลบ', () => fetch(`/api/projects/${p.id}`, { method: 'DELETE' }), `ลบงาน ${p.code} เข้าถังขยะแล้ว — กู้คืนได้ 30 วัน`)
+  }
+  const restore = async (p: ProjectRow) =>
+    call(p, 'กู้คืน', () => fetch(`/api/projects/${p.id}`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'restore' }),
+    }), `กู้คืนงาน ${p.code} แล้ว`)
+  const purge = async (p: ProjectRow) => {
+    if (!await uiConfirm(`ล้างงาน ${p.code} ถาวร?\n"${p.name}"\n\nงบประมาณ งวดงาน ค่าใช้จ่าย และลิงก์เอกสารของงานนี้จะหายทั้งหมด — กู้คืนไม่ได้อีก`)) return
+    await call(p, 'ล้าง', () => fetch(`/api/projects/${p.id}?hard=1`, { method: 'DELETE' }), `ล้างงาน ${p.code} ถาวรแล้ว`)
   }
 
   if (!projects) return <div className="empty">กำลังโหลดงานก่อสร้าง…</div>
@@ -57,20 +83,37 @@ export default function ProjectsView({ me, records, limitedData, showToast, onCh
       <div className="view-head">
         <div><h1>งานก่อสร้าง &amp; Budget Control</h1><p>เปิดงานจากใบเสนอราคาที่ลูกค้าตกลง — คุมงบ 6 หมวด บันทึกรายจ่าย เก็บเงินตามงวด</p></div>
         <span className="head-ctrl">
-          <select value={fStat} onChange={(e) => setFStat(e.target.value)}><option value="">ทุกสถานะ</option>{PROJECT_STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
+          <select value={trash ? '__trash' : fStat}
+            onChange={(e) => {
+              const v = e.target.value
+              if (v === '__trash') { setTrash(true); setFStat('') } else { setTrash(false); setFStat(v) }
+            }}>
+            <option value="">ทุกสถานะ</option>
+            {PROJECT_STATUSES.map((s) => <option key={s}>{s}</option>)}
+            <option value="__trash">🗑 ถังขยะ</option>
+          </select>
           <select value={fBu} onChange={(e) => setFBu(e.target.value)}><option value="">ทุก BU</option>{BUS.map((b) => <option key={b} value={b}>{BU_NAMES[b]}</option>)}</select>
-          {isAdminUp(me.role) && <button className="btn btn-primary" onClick={() => setNewOpen(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}><path d="M12 5v14M5 12h14" /></svg>เปิดงานใหม่</button>}
+          {isAdminUp(me.role) && !trash && <button className="btn btn-primary" onClick={() => setNewOpen(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}><path d="M12 5v14M5 12h14" /></svg>เปิดงานใหม่</button>}
         </span>
       </div>
 
-      <div className="kpis">
-        <Tile rail="var(--accent)" lab="งานทั้งหมด" big={String(projects.length)} unit={`งาน (กำลังทำ ${active.length})`} foot={`มูลค่าสัญญารวม ฿${fmtB(contractSum)}`} />
-        <Tile rail="#2563c9" lab="รับเงินแล้วรวม" big={fmtB(receivedSum)} unit="บาท" foot={contractSum ? `${(receivedSum / contractSum * 100).toFixed(1)}% ของมูลค่าสัญญา` : '—'} />
-        <Tile rail="#c2610a" lab="จ่ายแล้วรวม (อนุมัติ)" big={fmtB(spentSum)} unit="บาท" foot={`ค้างอนุมัติ ฿${fmtB(projects.reduce((a, p) => a + p.pendingAmount, 0))}`} />
-        <Tile rail="#3f8f3a" lab="กำไรรับ−จ่าย รวม" big={fmtB(receivedSum - spentSum)} unit="บาท" foot="เฉพาะเงินเข้า-ออกจริง" />
-      </div>
+      {trash ? (
+        <div className="hintline" style={{ fontSize: 12.5, marginBottom: 12 }}>
+          🗑 ถังขยะ — งานที่ลบแล้ว <b>กู้คืนได้ภายใน 30 วัน</b> ครบกำหนดระบบล้างทิ้งถาวรอัตโนมัติ · งานในถังขยะไม่นับรวมในยอดสรุปและไม่โผล่ในรายการปกติ
+          {' '}· เอกสารการเงินที่ออกไปแล้วยังอยู่ครบ งานที่มีเอกสารการเงินจึงล้างถาวรไม่ได้
+        </div>
+      ) : (
+        <>
+          <div className="kpis">
+            <Tile rail="var(--accent)" lab="งานทั้งหมด" big={String(projects.length)} unit={`งาน (กำลังทำ ${active.length})`} foot={`มูลค่าสัญญารวม ฿${fmtB(contractSum)}`} />
+            <Tile rail="#2563c9" lab="รับเงินแล้วรวม" big={fmtB(receivedSum)} unit="บาท" foot={contractSum ? `${(receivedSum / contractSum * 100).toFixed(1)}% ของมูลค่าสัญญา` : '—'} />
+            <Tile rail="#c2610a" lab="จ่ายแล้วรวม (อนุมัติ)" big={fmtB(spentSum)} unit="บาท" foot={`ค้างอนุมัติ ฿${fmtB(projects.reduce((a, p) => a + p.pendingAmount, 0))}`} />
+            <Tile rail="#3f8f3a" lab="กำไรรับ−จ่าย รวม" big={fmtB(receivedSum - spentSum)} unit="บาท" foot="เฉพาะเงินเข้า-ออกจริง" />
+          </div>
 
-      {list.length > 0 && <BudgetOverviewChart projects={list} />}
+          {list.length > 0 && <BudgetOverviewChart projects={list} />}
+        </>
+      )}
 
       <div className="alist">
         {list.map((p) => {
@@ -79,13 +122,14 @@ export default function ProjectsView({ me, records, limitedData, showToast, onCh
           const spendPct = p.budgetTotal > 0 ? p.spent / p.budgetTotal * 100 : 0
           const spendCol = spendPct > 100 ? '#b0281c' : spendPct >= 80 ? '#b58600' : '#3f8f3a'
           return (
-            <div className="arow" key={p.id} style={{ cursor: 'pointer', alignItems: 'stretch' }} onClick={() => setOpenId(p.id)}>
+            <div className="arow" key={p.id} style={{ cursor: trash ? 'default' : 'pointer', alignItems: 'stretch' }} onClick={() => { if (!trash) setOpenId(p.id) }}>
               <div className="ab" style={{ background: pm.c }} />
               <div className="aw" style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <span className="an">{p.name}</span>
                   <span className="qchip" style={{ color: pm.c, background: pm.b, cursor: 'default' }}>{pm.k}</span>
                   {p.pendingCount > 0 && <span className="qchip" style={{ color: '#b58600', background: '#fbeec0', cursor: 'default' }}>รออนุมัติ {p.pendingCount}</span>}
+                  {trash && <span className="qchip" style={{ color: '#b0281c', background: '#f4dbd7', cursor: 'default' }}>เหลือ {p.deletedAt ? daysLeft(p.deletedAt) : 30} วัน</span>}
                 </div>
                 <div className="as">{p.code} · {p.customerName || '—'} · {BU_NAMES[p.bu as keyof typeof BU_NAMES] || p.bu} · สัญญา ฿{commas(p.contractAmount)}{p.dueDate ? ' · กำหนดเสร็จ ' + thDate(p.dueDate) : ''}</div>
                 <div className="pj-bars">
@@ -95,19 +139,36 @@ export default function ProjectsView({ me, records, limitedData, showToast, onCh
                 </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignSelf: 'center' }}>
-                <button className="row-btn" onClick={(e) => { e.stopPropagation(); setOpenId(p.id) }}>จัดการ</button>
-                {isAdminUp(me.role) && (
-                  <button className="row-btn" style={{ color: '#b0281c' }} onClick={(e) => { e.stopPropagation(); remove(p) }}>ลบ</button>
+                {trash ? (
+                  <>
+                    {isAdminUp(me.role) && (
+                      <>
+                        <button className="row-btn" onClick={(e) => { e.stopPropagation(); restore(p) }}>กู้คืน</button>
+                        <button className="row-btn" style={{ color: '#b0281c' }} onClick={(e) => { e.stopPropagation(); purge(p) }}>ล้างถาวร</button>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <button className="row-btn" onClick={(e) => { e.stopPropagation(); setOpenId(p.id) }}>จัดการ</button>
+                    {isAdminUp(me.role) && (
+                      <button className="row-btn" style={{ color: '#b0281c' }} onClick={(e) => { e.stopPropagation(); remove(p) }}>ลบ</button>
+                    )}
+                  </>
                 )}
               </div>
             </div>
           )
         })}
-        {!list.length && <div className="empty">ยังไม่มีงานก่อสร้าง — เปิดจากใบเสนอราคาที่สถานะ &quot;ลูกค้าตกลง&quot;</div>}
+        {!list.length && (
+          <div className="empty">
+            {trash ? 'ถังขยะว่าง — ยังไม่มีงานที่ถูกลบ' : 'ยังไม่มีงานก่อสร้าง — เปิดจากใบเสนอราคาที่สถานะ "ลูกค้าตกลง"'}
+          </div>
+        )}
       </div>
 
       {/* ---- ภาพรวมบริษัท ---- */}
-      {projects.length > 0 && (
+      {!trash && projects.length > 0 && (
         <div className="grid g-2 mt">
           <section className="card">
             <div className="card-h"><h2>กำไรต่องาน (รับเงินจริง − จ่ายจริง)</h2><span className="hint">บาท</span></div>
@@ -666,6 +727,7 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
 function projHistText(h: HistItem): string {
   const map: Record<string, string> = {
     'project-open': 'เปิดงานก่อสร้าง', 'project-close': 'ปิดงาน 🏁', 'project-reopen': 'ปลดล็อกงาน',
+    'project-delete': 'ลบเข้าถังขยะ 🗑', 'project-restore': 'กู้คืนจากถังขยะ ↩', 'project-purge': 'ล้างถาวร',
     'project-status': 'เปลี่ยนสถานะ', 'project-edit': 'แก้ไขข้อมูล', 'budget-edit': 'ตั้ง/แก้งบประมาณ',
     'expense-create': 'บันทึกค่าใช้จ่าย', 'expense-approve': 'อนุมัติค่าใช้จ่าย ✓', 'expense-reject': 'ตีกลับค่าใช้จ่าย',
     'expense-edit': 'แก้ไขค่าใช้จ่าย', 'expense-delete': 'ลบค่าใช้จ่าย', installment: 'อัปเดตงวด',
