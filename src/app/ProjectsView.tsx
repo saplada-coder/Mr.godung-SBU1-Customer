@@ -37,6 +37,14 @@ export default function ProjectsView({ me, records, limitedData, showToast, onCh
 
   const list = useMemo(() => (projects || []).filter((p) => (!fStat || p.status === fStat) && (!fBu || p.bu === fBu)), [projects, fStat, fBu])
 
+  /** ลบงานที่เปิดผิด/เปิดซ้ำ — ฝั่งเซิร์ฟเวอร์กันงานที่มีเอกสารการเงิน งวดรับเงินแล้ว หรือค่าใช้จ่ายไว้อีกชั้น */
+  const remove = async (p: ProjectRow) => {
+    if (!await uiConfirm(`ลบงาน ${p.code}?\n"${p.name}"\n\nงบประมาณ งวดงาน และลิงก์เอกสารของงานนี้จะถูกลบไปด้วย — กู้คืนไม่ได้`)) return
+    const r = await fetch(`/api/projects/${p.id}`, { method: 'DELETE' })
+    if (r.ok) { showToast(`ลบงาน ${p.code} แล้ว`); await load(); onChanged() }
+    else showToast((await r.json()).error || 'ลบไม่สำเร็จ')
+  }
+
   if (!projects) return <div className="empty">กำลังโหลดงานก่อสร้าง…</div>
 
   const active = projects.filter((p) => p.status !== 'ปิดงาน')
@@ -86,7 +94,12 @@ export default function ProjectsView({ me, records, limitedData, showToast, onCh
                   <div className="pj-bar"><span>งวดงาน {p.instDone}/{p.instTotal}</span><div className="prog"><i style={{ width: (p.instTotal ? p.instDone / p.instTotal * 100 : 0) + '%', background: '#8b2fb5' }} /></div><b>{p.instTotal ? Math.round(p.instDone / p.instTotal * 100) + '%' : '—'}</b></div>
                 </div>
               </div>
-              <button className="row-btn" style={{ alignSelf: 'center' }} onClick={(e) => { e.stopPropagation(); setOpenId(p.id) }}>จัดการ</button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignSelf: 'center' }}>
+                <button className="row-btn" onClick={(e) => { e.stopPropagation(); setOpenId(p.id) }}>จัดการ</button>
+                {isAdminUp(me.role) && (
+                  <button className="row-btn" style={{ color: '#b0281c' }} onClick={(e) => { e.stopPropagation(); remove(p) }}>ลบ</button>
+                )}
+              </div>
             </div>
           )
         })}
