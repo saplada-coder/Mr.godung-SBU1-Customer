@@ -287,6 +287,10 @@ export const PRINT_CSS = `
 .qprint .ptoolbar button.line:hover{background:#05a948}
 .qprint .ptoolbar .pmsg{background:#fff;color:#111;border-radius:9px;padding:8px 12px;font-size:12.5px;max-width:340px;box-shadow:0 2px 10px rgba(0,0,0,.3)}
 .qprint .ptoolbar .pmsg.err{background:#ffe2e0;color:#8f2018}
+.qprint .ptoolbar .pshare{background:#fff;color:#111;border-radius:11px;padding:11px 12px;width:330px;font-size:12.5px;line-height:1.5;text-align:left;display:flex;flex-direction:column;gap:8px;box-shadow:0 2px 12px rgba(0,0,0,.35)}
+.qprint .ptoolbar .pshare textarea{width:100%;height:92px;font:inherit;font-size:12px;color:#111;background:#f7f7f7;border:1px solid #ccc;border-radius:7px;padding:7px;resize:none}
+.qprint .ptoolbar .pshare .row{display:flex;gap:6px;flex-wrap:wrap}
+.qprint .ptoolbar .pshare button{padding:7px 11px;font-size:12.5px;border-radius:7px}
 @media print{
   .qprint{background:#fff;padding:0}
   .qprint .page{box-shadow:none;margin:0;width:auto;min-height:0;page-break-after:always}
