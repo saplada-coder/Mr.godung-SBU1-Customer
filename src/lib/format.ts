@@ -27,6 +27,36 @@ export const thDateBE = (s: string | null | undefined) => {
 }
 export const daysBetween = (a: number, b: number) => Math.round((b - a) / DAY)
 
+/* ---- จำนวนเงินเป็นตัวหนังสือไทย: 3000000 → "สามล้านบาทถ้วน" (ใช้ในวงเล็บท้ายมูลค่าสัญญา) ---- */
+const TH_DIGITS = ['ศูนย์', 'หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า']
+const TH_PLACES = ['', 'สิบ', 'ร้อย', 'พัน', 'หมื่น', 'แสน', 'ล้าน']
+const readInt = (s: string): string => {
+  // เกินเจ็ดหลักอ่านเป็น "...ล้าน..." ซ้อนกันไปเรื่อย ๆ
+  if (s.length > 7) {
+    const tail = s.slice(-6)
+    return readInt(s.slice(0, -6)) + 'ล้าน' + (Number(tail) ? readInt(tail) : '')
+  }
+  let out = ''
+  for (let i = 0; i < s.length; i++) {
+    const d = +s[i]
+    if (!d) continue
+    const pos = s.length - i - 1
+    if (pos === 0 && d === 1 && s.length > 1) out += 'เอ็ด'
+    else if (pos === 1 && d === 1) out += ''
+    else if (pos === 1 && d === 2) out += 'ยี่'
+    else out += TH_DIGITS[d]
+    out += TH_PLACES[pos]
+  }
+  return out
+}
+export const bahtText = (n: number) => {
+  const v = Math.abs(Math.round(n * 100) / 100)
+  const baht = Math.floor(v)
+  const satang = Math.round((v - baht) * 100)
+  const head = baht ? readInt(String(baht)) + 'บาท' : 'ศูนย์บาท'
+  return (n < 0 ? 'ลบ' : '') + head + (satang ? readInt(String(satang)) + 'สตางค์' : 'ถ้วน')
+}
+
 export const fmtPhone = (p: string | null) => {
   const s = (p || '').replace(/\D/g, '')
   if (s.length === 10) return s.slice(0, 3) + '-' + s.slice(3, 6) + '-' + s.slice(6)
