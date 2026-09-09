@@ -2,16 +2,23 @@ import { NextResponse } from 'next/server'
 import { randomBytes } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { getDb } from '@/db'
-import { quotations, quotationItems, customers, activityLog } from '@/db/schema'
+import { quotations, customers, activityLog } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
-import { quoteTotals, today } from '@/lib/biz'
-import { thDateBE } from '@/lib/format'
+import { today } from '@/lib/biz'
 import { canEdit } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
 /** โทเคน 16 ตัวอักษรจาก crypto — เดาไม่ได้ ผู้ที่ไม่มีลิงก์เปิดใบไม่เจอ */
 const mintToken = () => randomBytes(12).toString('base64url').slice(0, 16)
+
+/** คำนำหน้าที่มีอยู่แล้ว/ชื่อนิติบุคคล — เติม "คุณ" ทับจะอ่านแปลก เช่น "คุณบริษัท พีดี อควา" */
+const TITLED = /^(คุณ|นาย|นาง|นางสาว|น\.ส\.|ดร\.|บริษัท|บจก|บมจ|หจก|ห\.จ\.ก|ร้าน|Mr|Mrs|Ms|Dr)/i
+/** เรียกลูกค้าว่า "คุณ..." ในข้อความที่ส่งไลน์เสมอ */
+const khun = (name: string) => {
+  const s = name.trim()
+  return !s || TITLED.test(s) ? s : `คุณ${s}`
+}
 
 /**
  * ขอลิงก์สาธารณะของใบเสนอราคาเพื่อส่งให้ลูกค้า (ปุ่ม "ส่งไลน์" บนหน้าพิมพ์)
@@ -28,8 +35,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (!q) return NextResponse.json({ error: 'not found' }, { status: 404 })
   if (q.deletedAt) return NextResponse.json({ error: 'ใบนี้อยู่ในถังขยะ กู้คืนก่อนถึงจะส่งได้' }, { status: 400 })
   if (q.status === 'ยกเลิก') return NextResponse.json({ error: 'ใบนี้ยกเลิกแล้ว ส่งให้ลูกค้าไม่ได้' }, { status: 400 })
-  if (q.validUntil && q.validUntil < today())
-    return NextResponse.json({ error: `ใบนี้หมดอายุแล้ว (ใช้ได้ถึง ${thDateBE(q.validUntil)}) — แก้วันที่ใช้ได้ถึงก่อนส่ง` }, { status: 400 })
 
   let token = q.shareToken
   if (!token) {
@@ -51,21 +56,15 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     action: 'quote-share', field: 'ลิงก์ไลน์', newValue: `แชร์ลิงก์ใบ ${q.code}`,
   })
 
-  const [items, [cust]] = await Promise.all([
-    db.select().from(quotationItems).where(eq(quotationItems.quotationId, id)),
-    db.select().from(customers).where(eq(customers.id, q.customerId)).limit(1),
-  ])
-  const t = quoteTotals(q, items, [])
+  const [cust] = await db.select().from(customers).where(eq(customers.id, q.customerId)).limit(1)
   const origin = req.headers.get('origin') || new URL(req.url).origin
   const url = `${origin}/q/${token}`
   const text = [
     `ใบเสนอราคา ${q.code}${q.rev > 1 ? ` (Rev.${q.rev})` : ''}`,
-    `ลูกค้า: ${q.custName || cust?.name || cust?.chname || '-'}`,
-    `งบประมาณการก่อสร้าง: ฿${Math.round(t.grand).toLocaleString('en-US')}`,
-    q.validUntil ? `ใช้ได้ถึง ${thDateBE(q.validUntil)}` : '',
+    `ลูกค้า: ${khun(q.custName || cust?.name || cust?.chname || '-')}`,
     '',
     `เปิดดู / บันทึก PDF: ${url}`,
-  ].filter(Boolean).join('\n')
+  ].join('\n')
 
   return NextResponse.json({ ok: true, url, text, code: q.code })
 }
