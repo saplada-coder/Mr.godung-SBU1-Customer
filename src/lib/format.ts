@@ -19,6 +19,12 @@ export const thDate = (s: string) => {
   const p = s.split('-')
   return +p[2] + ' ' + TH_MONTHS[+p[1]] + ' ' + p[0]
 }
+/** วันที่แบบไทย พ.ศ. เช่น 13/8/2569 — รูปแบบที่ใช้บนฟอร์มเอกสารจริง */
+export const thDateBE = (s: string | null | undefined) => {
+  if (!s) return ''
+  const p = s.split('-')
+  return `${+p[2]}/${+p[1]}/${+p[0] + 543}`
+}
 export const daysBetween = (a: number, b: number) => Math.round((b - a) / DAY)
 
 export const fmtPhone = (p: string | null) => {

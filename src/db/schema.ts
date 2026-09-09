@@ -279,6 +279,8 @@ export const quotations = pgTable(
     approvedAt: timestamp('approved_at', { withTimezone: true }),
     rejectReason: text('reject_reason'),
     sentAt: date('sent_at'),
+    /** โทเคนลิงก์สาธารณะที่ส่งให้ลูกค้าทางไลน์ — /q/{token} เปิดดูใบได้โดยไม่ต้องล็อกอิน (null = ยังไม่เคยแชร์) */
+    shareToken: varchar('share_token', { length: 24 }).unique(),
     /** ใบที่ถูกแก้ไข → ชี้ไป rev ใหม่ที่แทนที่ */
     supersededById: integer('superseded_by_id'),
     projectId: integer('project_id'),
