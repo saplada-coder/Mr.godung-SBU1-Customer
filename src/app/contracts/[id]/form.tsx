@@ -36,6 +36,8 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
 
   const instTotal = f.installments.reduce((a, i) => a + (i.amount || 0), 0)
   const diff = Math.round(instTotal - f.contractAmount)
+  /** ที่ตั้งโครงการต้องมีทั้งตำบลและอำเภอ ไม่ใช่แค่จังหวัดที่ระบบเติมให้ตอนสร้าง */
+  const siteIncomplete = !/ตำบล|ต\./.test(f.siteAddress) || !/อำเภอ|อ\.|เขต/.test(f.siteAddress)
 
   const save = async (extra?: Partial<ContractInit>) => {
     setBusy(true); setMsg(null)
@@ -101,9 +103,12 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
             onChange={(e) => set('projectName', e.target.value)} />
         </div>
         <div className="field full">
-          <label>ที่ตั้งโครงการ</label>
+          <label>ที่ตั้งโครงการ — ตำบล / อำเภอ / จังหวัด</label>
           <input value={f.siteAddress} disabled={locked} placeholder="เช่น ตำบลคูคต อำเภอลำลูกกา จังหวัดปทุมธานี"
             onChange={(e) => set('siteAddress', e.target.value)} />
+          {siteIncomplete
+            ? <div className="err">ยังไม่ครบ — ระบบเติมให้ได้แค่จังหวัด เพราะข้อมูลลูกค้าไม่มีตำบล/อำเภอ กรุณาเติมให้ครบก่อนพิมพ์</div>
+            : <div className="hintline">พิมพ์ออกที่หน้าปกสัญญาบรรทัดล่างสุด และในข้อ 1 ขอบเขตของงาน</div>}
         </div>
         <div className="field">
           <label>ผู้มีอำนาจลงนาม (ฝ่ายผู้รับจ้าง)</label>

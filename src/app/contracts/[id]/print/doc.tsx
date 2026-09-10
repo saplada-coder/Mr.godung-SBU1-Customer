@@ -109,7 +109,8 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
         <div className="cv-project">
           <div className="b big">{c.projectName || '(ยังไม่ได้ตั้งชื่อโครงการ)'}</div>
           <div className="b big">{employer || '(ยังไม่ระบุผู้ว่าจ้าง)'}</div>
-          {c.siteAddress && <div className="b big">{c.siteAddress}</div>}
+          {/* ที่ตั้งหน้างาน ตำบล/อำเภอ/จังหวัด — ขึ้นเป็นคำเตือนถ้ายังว่าง จะได้เห็นตั้งแต่ก่อนพิมพ์ */}
+          <div className="b big">{c.siteAddress || '(ยังไม่ได้ระบุที่ตั้งโครงการ)'}</div>
         </div>
       </div></div></div>
 

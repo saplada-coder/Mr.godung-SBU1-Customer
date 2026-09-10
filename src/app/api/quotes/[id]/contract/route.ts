@@ -61,7 +61,8 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     warrantyYears: DEFAULT_WARRANTY_YEARS,
     buildingSize: w && l ? `${w}*${l}` : null,
     buildingSqm: nstr(num(cust?.sqm)),
-    siteAddress: cust?.province || null,
+    // ข้อมูลลูกค้ามีแค่จังหวัด ตำบล/อำเภอต้องกรอกเองในหน้าร่างสัญญา — ใส่คำว่า "จังหวัด" นำไว้ให้อ่านเป็นที่อยู่
+    siteAddress: cust?.province ? `จังหวัด${cust.province}` : null,
     scopeIncluded: q.spec,
     scopeExcluded: q.exclusions,
     warrantyText: q.warranty,
