@@ -131,6 +131,19 @@ export const QDOCS = [
 export const QDOC_STATUSES: string[] = QDOCS.map((q) => q.k)
 export const qdocMeta = (s: string) => QDOCS.find((x) => x.k === s) ?? QDOCS[0]
 
+/** สถานะของงานที่ติดตามในหน้า Key Finding + สี */
+export const KF_STAGES = [
+  { k: 'ยังไม่เริ่ม', c: '#5f6b76', b: '#e9ebee' },
+  { k: 'กำลังทำ', c: '#2563c9', b: '#d9e8fb' },
+  { k: 'เสร็จแล้ว', c: '#3f8f3a', b: '#dcedd2' },
+  { k: 'ยกเลิก', c: '#b0281c', b: '#f4dbd7' },
+] as const
+export const KF_STATUSES: string[] = KF_STAGES.map((x) => x.k)
+export type KfStatus = (typeof KF_STAGES)[number]['k']
+export const kfMeta = (s: string) => KF_STAGES.find((x) => x.k === s) ?? KF_STAGES[0]
+/** สถานะที่ถือว่างานยังค้างอยู่ — ใช้นับตัวเลขแจ้งเตือนข้างเมนู */
+export const KF_OPEN: string[] = ['ยังไม่เริ่ม', 'กำลังทำ']
+
 /** สถานะสัญญาว่าจ้างรับเหมาก่อสร้าง + สี */
 export const CONTRACT_DOCS = [
   { k: 'ร่าง', c: '#5f6b76', b: '#e9ebee' },

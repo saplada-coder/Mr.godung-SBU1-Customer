@@ -12,7 +12,7 @@ import {
   index,
 } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
-import type { ContractStatus } from '@/lib/constants'
+import type { ContractStatus, KfStatus } from '@/lib/constants'
 
 /* ---- Enums (สั้น/ASCII พอที่จะเป็น pg enum ได้) ---- */
 export const buEnum = pgEnum('bu', ['BU1', 'BU2', 'BU3', 'BU4', 'BU5', 'BU6', 'BU7'])
@@ -341,6 +341,32 @@ export const quotationInstallments = pgTable(
     note: text('note'),
   },
   (t) => [index('qinst_quotation_idx').on(t.quotationId)],
+)
+
+/**
+ * Key Finding — บันทึกติดตามงานจากการประชุม (แทนชีตที่ทีมใช้อยู่)
+ * หนึ่งแถวคือ สิ่งที่พบ → จะทำอะไร → ใครรับผิดชอบ → เสร็จเมื่อไร → ถึงไหนแล้ว
+ * ผู้รับผิดชอบเก็บเป็นข้อความ ไม่ผูกกับบัญชีผู้ใช้ เพราะในทางปฏิบัติใส่ทั้งชื่อคน ชื่อตำแหน่ง (MD/MKT) และชื่อสำนักงาน
+ */
+export const keyFindings = pgTable(
+  'key_findings',
+  {
+    id: serial('id').primaryKey(),
+    /** วันที่ประชุมที่พบเรื่องนี้ */
+    meetingDate: date('meeting_date').notNull(),
+    /** หน่วยงาน/หัวข้อ เช่น SBU1, ออฟฟิศ, Co working */
+    topic: varchar('topic', { length: 160 }),
+    finding: text('finding').notNull(),
+    actionPlan: text('action_plan'),
+    owner: varchar('owner', { length: 120 }),
+    dueDate: date('due_date'),
+    status: varchar('status', { length: 20 }).$type<KfStatus>().notNull().default('ยังไม่เริ่ม'),
+    note: text('note'),
+    createdBy: integer('created_by').references(() => users.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('kf_status_idx').on(t.status), index('kf_due_idx').on(t.dueDate)],
 )
 
 /**
