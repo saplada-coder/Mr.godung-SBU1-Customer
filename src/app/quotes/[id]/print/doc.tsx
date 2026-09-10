@@ -236,33 +236,36 @@ export const PRINT_CSS = `
 .qprint thead th{position:static;cursor:default;white-space:normal}
 .qprint tbody tr:hover td{background:transparent}
 .qprint tbody td,.qprint thead th{border-bottom:none;padding:0}
-.qprint table.items th,.qprint table.insts th{color:#111;font-size:11px}
-.qprint .page{background:#fff;width:210mm;min-height:290mm;margin:0 auto 18px;padding:12mm 11mm;box-shadow:0 2px 14px rgba(0,0,0,.35);font-size:12.5px;line-height:1.45;position:relative}
+/* ---- ขนาดตัวอักษร: ตัวเนื้อความ 14px ≈ 10.5pt ซึ่งเป็นขนาดมาตรฐานของเอกสารธุรกิจบน A4
+   ของเดิม 12.5px ≈ 9.4pt เล็กกว่ามาตรฐานจนอ่านบนกระดาษจริงลำบาก
+   ใบที่รายการเยอะจะถูก FitPages ย่อกลับลงมาให้พอดีแผ่นเอง ขนาดที่ใหญ่ขึ้นจึงเห็นผลชัดกับใบสั้น ---- */
+.qprint table.items th,.qprint table.insts th{color:#111;font-size:12px}
+.qprint .page{background:#fff;width:210mm;min-height:290mm;margin:0 auto 18px;padding:12mm 11mm;box-shadow:0 2px 14px rgba(0,0,0,.35);font-size:14px;line-height:1.45;position:relative}
 .qprint .pre{white-space:pre-wrap}
 .qprint .b{font-weight:700}.qprint .c{text-align:center}.qprint .r{text-align:right}
-.qprint .red{color:#c00}.qprint .dim{color:#555}.qprint .small{font-size:11px}
-.qprint .doc-title{text-align:right;font-weight:700;font-size:14px}
-.qprint .doc-title .orig{display:block;font-weight:400;font-size:10.5px}
+.qprint .red{color:#c00}.qprint .dim{color:#555}.qprint .small{font-size:12px}
+.qprint .doc-title{text-align:right;font-weight:700;font-size:15.5px}
+.qprint .doc-title .orig{display:block;font-weight:400;font-size:11.5px}
 .qprint .head{display:flex;gap:14px;align-items:center;margin:4px 0 12px}
 .qprint .logo{width:88px;height:88px;object-fit:contain;border-radius:10px;background:#000}
-.qprint .co{font-size:11px}
-.qprint .co-name{font-size:16px;font-weight:700;margin-bottom:2px}
+.qprint .co{font-size:12px}
+.qprint .co-name{font-size:17.5px;font-weight:700;margin-bottom:2px}
 .qprint .info{display:grid;grid-template-columns:1.5fr 1fr;gap:10px;margin-bottom:12px}
-.qprint .info-t{width:100%;border-collapse:collapse;background:#e8e8e8;font-size:11.5px}
+.qprint .info-t{width:100%;border-collapse:collapse;background:#e8e8e8;font-size:13px}
 .qprint .info-t.pink{background:#f7d9d9}
 .qprint .info-t td{padding:3px 8px;vertical-align:top}
 .qprint .info-t td.k{font-weight:700;width:40%;white-space:nowrap}
 .qprint .sec-t{border:1px solid #333;text-align:center;font-weight:700;padding:4px;margin:10px 0 0}
-.qprint .sec-t.big{font-size:14px}
-.qprint table.items,.qprint table.insts{width:100%;border-collapse:collapse;font-size:11.5px}
+.qprint .sec-t.big{font-size:15.5px}
+.qprint table.items,.qprint table.insts{width:100%;border-collapse:collapse;font-size:13px}
 .qprint table.items th,.qprint table.items td,.qprint table.insts th,.qprint table.insts td{border:1px solid #333;padding:4px 6px;vertical-align:top}
 .qprint table.items th,.qprint table.insts th{background:#f2c9c9;font-weight:700;text-align:center}
 .qprint .w1{width:44px}.qprint .w2{width:52px}.qprint .w3{width:88px}.qprint .w4{width:120px}.qprint .w5{width:70px}.qprint .w6{width:100px}
 .qprint tr.sum td{background:#fbf3d2}
 .qprint .totals-row{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;margin-top:10px;align-items:start}
-.qprint .notes{font-size:11.5px;display:flex;flex-direction:column;gap:4px}
-.qprint .warranty{background:#cfe3f5;padding:7px 9px;margin-top:6px;font-size:11px}
-.qprint table.totals{width:100%;border-collapse:collapse;font-size:12px}
+.qprint .notes{font-size:13px;display:flex;flex-direction:column;gap:4px}
+.qprint .warranty{background:#cfe3f5;padding:7px 9px;margin-top:6px;font-size:12.5px}
+.qprint table.totals{width:100%;border-collapse:collapse;font-size:13.5px}
 .qprint table.totals td{padding:2.5px 6px}
 .qprint table.totals td:first-child{text-align:right}
 .qprint table.totals td:last-child{width:34px}
@@ -270,19 +273,17 @@ export const PRINT_CSS = `
 .qprint .hl2{background:#38e838;font-weight:700;text-decoration:underline}
 .qprint .hl3{background:#f6e83a}
 .qprint .grand td{font-weight:700}
-.qprint .spec{border:1px solid #333;border-top:none;padding:9px 12px;font-size:11.5px}
-.qprint .note-extra{margin-top:8px;font-size:11.5px}
-/* FitPages ตั้ง transform/width ให้ .pg-in และความสูงให้ .pg-fit เอง ที่นี่ตั้งแค่จุดหมุน */
-.qprint .pg-in{transform-origin:top left}
+.qprint .spec{border:1px solid #333;border-top:none;padding:9px 12px;font-size:13px}
+.qprint .note-extra{margin-top:8px;font-size:13px}
 /* กันบล็อกลายเซ็นถูกผ่าครึ่งคนละหน้า เผื่อกรณีที่ย่อจนสุดเพดานแล้วยังไม่พอ */
-.qprint .signs{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:22px;text-align:center;font-size:11.5px;break-inside:avoid;page-break-inside:avoid}
+.qprint .signs{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:22px;text-align:center;font-size:12.5px;break-inside:avoid;page-break-inside:avoid}
 /* กันช่องลายเซ็นแต่ละช่องถูกผ่าเองด้วย — เบราว์เซอร์บางตัวไม่สนใจ break-inside ที่ตัว grid แต่สนใจที่ลูก */
 .qprint .signs .sign{break-inside:avoid;page-break-inside:avoid}
 .qprint .sig-space{height:34px}
 .qprint .sig-img{height:34px;object-fit:contain;display:block;margin:0 auto}
-.qprint table.inst-head{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+.qprint table.inst-head{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:8px}
 .qprint table.inst-head td{border:1px solid #333;padding:4px 8px}
-.qprint .banks{margin-top:14px;font-size:11.5px}
+.qprint .banks{margin-top:14px;font-size:13px}
 .qprint .bank-h{text-align:center;margin-bottom:6px}
 .qprint .bank-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .qprint .bank-t{background:#222;color:#fff;font-weight:700;text-align:center;padding:3px;margin-bottom:5px}
@@ -296,7 +297,6 @@ export const PRINT_CSS = `
 .qprint .ptoolbar .pmsg{background:#fff;color:#111;border-radius:9px;padding:8px 12px;font-size:12.5px;max-width:340px;box-shadow:0 2px 10px rgba(0,0,0,.3)}
 .qprint .ptoolbar .pmsg.err{background:#ffe2e0;color:#8f2018}
 .qprint .ptoolbar .pshare{background:#fff;color:#111;border-radius:11px;padding:11px 12px;width:330px;font-size:12.5px;line-height:1.5;text-align:left;display:flex;flex-direction:column;gap:8px;box-shadow:0 2px 12px rgba(0,0,0,.35)}
-.qprint .ptoolbar .pshare textarea{width:100%;height:92px;font:inherit;font-size:12px;color:#111;background:#f7f7f7;border:1px solid #ccc;border-radius:7px;padding:7px;resize:none}
 .qprint .ptoolbar .pshare ol.psteps{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:5px}
 .qprint .ptoolbar .pshare .row{display:flex;gap:6px;flex-wrap:wrap}
 .qprint .ptoolbar .pshare button{padding:7px 11px;font-size:12.5px;border-radius:7px}
