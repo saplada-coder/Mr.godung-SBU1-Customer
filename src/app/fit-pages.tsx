@@ -15,8 +15,12 @@ import { useEffect } from 'react'
  */
 const PX_PER_MM = 96 / 25.4
 const A4_H = 297 * PX_PER_MM
-/** เผื่อความคลาดเคลื่อนของเบราว์เซอร์ตอนแปลง mm เป็นพิกเซล */
-const SAFETY = 2 * PX_PER_MM
+/**
+ * เผื่อหัว/ท้ายกระดาษที่เบราว์เซอร์พิมพ์เอง (URL, วันที่, "หน้าที่ 1 จาก 8") บวกความคลาดเคลื่อน mm→px
+ * ผู้ใช้ปิดหัวท้ายในหน้าต่างพิมพ์ได้ก็จริง แต่ค่าเริ่มต้นของทุกเบราว์เซอร์คือเปิด และเราสั่งปิดจาก CSS ไม่ได้
+ * ถ้าไม่เผื่อไว้ หน้าที่คำนวณว่า "พอดี" จะถูกแถบพวกนี้เบียดจนลายเซ็นตกไปแผ่นถัดไป
+ */
+const RESERVE = 20 * PX_PER_MM
 /** ย่อได้ต่ำสุดเท่านี้ ต่ำกว่านี้ตัวหนังสือเล็กจนอ่านไม่ออก ปล่อยให้ล้นไปหน้าถัดไปดีกว่า */
 const MIN_SCALE = 0.6
 
@@ -30,11 +34,12 @@ export default function FitPages() {
         box.style.height = ''
         inner.style.transform = ''
         inner.style.width = ''
-        // ขอบบน-ล่างอ่านจาก .page จริง — ใบเสนอราคาใช้ 12mm สัญญาใช้ 16mm
+        // ขอบบน-ล่างอ่านจาก .page จริง — ใบเสนอราคาใช้ 12mm สัญญาใช้ 16mm หน้าปกสัญญา 24mm
         const page = box.parentElement
-        const cs = page && getComputedStyle(page)
-        const pad = cs ? parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) : 0
-        const avail = A4_H - pad - SAFETY
+        if (!page || page.classList.contains('no-fit')) return
+        const cs = getComputedStyle(page)
+        const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)
+        const avail = A4_H - pad - RESERVE
         const h = inner.scrollHeight
         if (h <= avail) return
         const s = Math.max(MIN_SCALE, avail / h)

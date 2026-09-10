@@ -216,8 +216,9 @@ export default function QuoteDoc({ data, toolbar }: { data: QuoteDocData; toolba
       )}
 
       {/* ---------- หน้า 3+: รูปผลงาน ---------- */}
+      {/* no-fit: รูปผลงานหลายรูปยังไงก็กินหลายแผ่น ย่อให้พอดีแผ่นเดียวมีแต่ทำให้รูปเล็กจนไม่มีประโยชน์ */}
       {printImages.length > 0 && (
-        <div className="page"><div className="pg-fit"><div className="pg-in">
+        <div className="page no-fit"><div className="pg-fit"><div className="pg-in">
           {printImages.map((src, i) => (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img className="pf" key={i} src={src} alt="" />
@@ -274,7 +275,9 @@ export const PRINT_CSS = `
 /* FitPages ตั้ง transform/width ให้ .pg-in และความสูงให้ .pg-fit เอง ที่นี่ตั้งแค่จุดหมุน */
 .qprint .pg-in{transform-origin:top left}
 /* กันบล็อกลายเซ็นถูกผ่าครึ่งคนละหน้า เผื่อกรณีที่ย่อจนสุดเพดานแล้วยังไม่พอ */
-.qprint .signs{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:26px;text-align:center;font-size:11.5px;break-inside:avoid;page-break-inside:avoid}
+.qprint .signs{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:22px;text-align:center;font-size:11.5px;break-inside:avoid;page-break-inside:avoid}
+/* กันช่องลายเซ็นแต่ละช่องถูกผ่าเองด้วย — เบราว์เซอร์บางตัวไม่สนใจ break-inside ที่ตัว grid แต่สนใจที่ลูก */
+.qprint .signs .sign{break-inside:avoid;page-break-inside:avoid}
 .qprint .sig-space{height:34px}
 .qprint .sig-img{height:34px;object-fit:contain;display:block;margin:0 auto}
 .qprint table.inst-head{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
