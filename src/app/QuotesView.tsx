@@ -7,15 +7,17 @@ import {
 } from '@/lib/constants'
 import { commas, thDate, fmtPhone } from '@/lib/format'
 import { calcTotals, pickImage, uiConfirm, type Quote, type HistItem } from './biz-shared'
+import { CustLink } from './CustomerDocs'
 
 type Me = { id: number; email: string; name: string | null; image: string | null; role: Role; bu: string | null }
 type Cust = { id: number; code: string; bu: string; name: string | null; chname: string | null; phone: string | null; province: string | null; sqm: number | null; d: string | null }
 
 /* ================= รายการใบเสนอราคา ================= */
-export default function QuotesView({ me, records, limitedData, openQuoteId, onOpenedQuote, showToast, onChanged, onOpenProject }: {
+export default function QuotesView({ me, records, limitedData, openQuoteId, onOpenedQuote, showToast, onChanged, onOpenProject, onOpenCustomer }: {
   me: Me; records: Cust[]; limitedData?: boolean
   openQuoteId?: number | null; onOpenedQuote?: () => void
   showToast: (m: string) => void; onChanged: () => void; onOpenProject: (projectId: number) => void
+  onOpenCustomer: (customerId: number) => void
 }) {
   const [quotes, setQuotes] = useState<Quote[] | null>(null)
   const [q, setQ] = useState(''); const [fStat, setFStat] = useState(''); const [fBu, setFBu] = useState('')
@@ -112,7 +114,10 @@ export default function QuotesView({ me, records, limitedData, openQuoteId, onOp
               return (
                 <tr key={x.id}>
                   <td className="code">{x.code}{x.rev > 1 && <span className="tag-new">Rev.{x.rev}</span>}</td>
-                  <td className="name">{x.customerName || '—'}<span className="prov">{x.customerCode}</span></td>
+                  <td className="name">
+                    {x.customerName ? <CustLink id={x.customerId} name={x.customerName} onOpen={onOpenCustomer} /> : '—'}
+                    <span className="prov">{x.customerCode}</span>
+                  </td>
                   <td className="amt">฿{commas(x.total)}</td>
                   <td className="amt" style={{ color: x.profit == null ? 'var(--text-faint)' : x.profit >= 0 ? '#3f8f3a' : 'var(--accent)' }}>
                     {x.profit == null ? '—' : `฿${commas(x.profit)} (${(x.profitPct || 0).toFixed(0)}%)`}
@@ -152,7 +157,7 @@ export default function QuotesView({ me, records, limitedData, openQuoteId, onOp
         <QuoteModal id={openId} me={me} showToast={showToast}
           onClose={() => setOpenId(null)}
           onChanged={() => { load(); onChanged() }}
-          onOpenProject={onOpenProject} />
+          onOpenProject={onOpenProject} onOpenCustomer={onOpenCustomer} />
       )}
     </>
   )
@@ -206,9 +211,10 @@ type InstRowE = { title: string; detail: string; percent: string; amount: string
 const stripC = (s: string) => s.replace(/[^\d]/g, '')
 const fmtC = (s: string) => (s ? Number(s).toLocaleString('en-US') : '')
 
-export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToast }: {
+export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, onOpenCustomer, showToast }: {
   id: number; me: Me; onClose: () => void; onChanged: () => void
   onOpenProject: (projectId: number) => void; showToast: (m: string) => void
+  onOpenCustomer?: (customerId: number) => void
 }) {
   const [quote, setQuote] = useState<Quote | null>(null)
   const [history, setHistory] = useState<HistItem[]>([])
@@ -363,7 +369,10 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, showToas
               {quote.code}{quote.rev > 1 && <span className="tag-new">Rev.{quote.rev}</span>}
               <span className="qchip" style={{ color: m.c, background: m.b, cursor: 'default' }}>{m.k}</span>
             </h3>
-            <div className="sub">{quote.customerName || '—'} · {quote.customerCode} · {BU_NAMES[quote.bu as keyof typeof BU_NAMES] || quote.bu}{quote.creatorName ? ' · ผู้ทำ ' + quote.creatorName : ''}</div>
+            <div className="sub">
+              {quote.customerName ? <CustLink id={quote.customerId} name={quote.customerName} onOpen={onOpenCustomer} /> : '—'}
+              {' '}· {quote.customerCode} · {BU_NAMES[quote.bu as keyof typeof BU_NAMES] || quote.bu}{quote.creatorName ? ' · ผู้ทำ ' + quote.creatorName : ''}
+            </div>
           </div>
           <button className="modal-x" onClick={onClose}>×</button>
         </div>

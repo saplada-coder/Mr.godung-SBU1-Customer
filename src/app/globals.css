@@ -4,6 +4,9 @@
   --border:#e7dedf; --border-strong:#d3c7c8;
   --text:#1a1416; --text-dim:#6b5f61; --text-faint:#9c9093;
   --accent:#d11f2a; --accent-soft:#fbe5e6; --accent-deep:#a3121c;
+  /* สีของสิ่งที่ "กดแล้วไปต่อได้" — ใช้สีตัวหนังสือปกติ (ขาวในโหมดมืด ดำในโหมดสว่าง)
+     ตัวบอกว่ากดได้คือเส้นใต้กับไอคอน ไม่ใช่สี จะได้ไม่ตีกับสีแดงประจำแบรนด์ */
+  --link:#1a1416; --link-soft:#ece4e5;
   --won:#1c191a; --pending:#726a6d; --grid:#ece4e5; --sidebar:#1a1416;
   --shadow:0 1px 2px rgba(40,18,20,.05),0 4px 16px rgba(40,18,20,.06);
   --font:var(--font-thai),system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -13,6 +16,7 @@
   --border:#332a2b; --border-strong:#463b3d;
   --text:#f2ecec; --text-dim:#b3a6a8; --text-faint:#7d7173;
   --accent:#ff4d57; --accent-soft:#3a1c1f; --accent-deep:#ff727b;
+  --link:#f2ecec; --link-soft:#2c2526;
   --won:#f0eceb; --pending:#a1979a; --grid:#2a2324; --sidebar:#0d0a0b;
   --shadow:0 1px 2px rgba(0,0,0,.34),0 6px 20px rgba(0,0,0,.3);
 }}
@@ -21,6 +25,7 @@
   --border:#332a2b; --border-strong:#463b3d;
   --text:#f2ecec; --text-dim:#b3a6a8; --text-faint:#7d7173;
   --accent:#ff4d57; --accent-soft:#3a1c1f; --accent-deep:#ff727b;
+  --link:#f2ecec; --link-soft:#2c2526;
   --won:#f0eceb; --pending:#a1979a; --grid:#2a2324; --sidebar:#0d0a0b;
   --shadow:0 1px 2px rgba(0,0,0,.34),0 6px 20px rgba(0,0,0,.3);
 }
@@ -198,6 +203,13 @@ td.name .chline{display:flex;align-items:center;gap:5px;margin-top:2px;font-size
 .clip{display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--text-dim);font-weight:600}.clip svg{width:12px;height:12px}
 th.act,td.act{width:56px}td.act{text-align:center}
 .tag-new{display:inline-block;font-size:9.5px;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:5px;padding:1px 6px;margin-left:6px;vertical-align:middle}
+/* ชื่อลูกค้าที่กดเปิดกล่อง "เอกสารของลูกค้า" ได้
+   ต้องเห็นชัดว่ากดได้ตั้งแต่ยังไม่เอาเมาส์ไปชี้ คนที่เพิ่งเริ่มใช้จะได้ไม่มองข้าม
+   จึงเป็นสีลิงก์ + ขีดเส้นใต้ + ไอคอนเอกสารกำกับ (เป็น button เพื่อให้กดด้วยคีย์บอร์ดได้ด้วย) */
+.cust-link{display:inline-flex;align-items:center;gap:4px;background:none;border:none;padding:0;margin:0;font:inherit;font-weight:inherit;color:var(--link);cursor:pointer;text-align:left;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px;border-radius:5px}
+.cust-link svg{width:12px;height:12px;flex:none;opacity:.8}
+.cust-link:hover{background:var(--link-soft);text-decoration-thickness:2px;box-shadow:0 0 0 3px var(--link-soft)}
+.cust-link:focus-visible{outline:2px solid var(--border-strong);outline-offset:2px}
 .more{text-align:center;padding:14px}
 .more button{background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:9px 18px;font-size:13px;color:var(--text-dim);cursor:pointer;font-weight:600}
 .more button:hover{border-color:var(--border-strong);color:var(--text)}

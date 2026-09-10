@@ -4,15 +4,18 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BILL_KINDS, billKindMeta, COST_CATS, OFFICE_CATS, canEdit, isAdminUp, type Role } from '@/lib/constants'
 import { commas, thDate } from '@/lib/format'
 import { uiPrompt, type InstRow } from './biz-shared'
+import { CustLink } from './CustomerDocs'
 import { BillingModal, BillDetailModal } from './ProjectsView'
 import { CustomerPicker } from './QuotesView'
 
 type Me = { id: number; email: string; name: string | null; image: string | null; role: Role; bu: string | null }
 type Cust = { id: number; code: string; bu: string; name: string | null; chname: string | null; phone: string | null; province: string | null; sqm: number | null; d: string | null }
-type ProjLite = { id: number; code: string; name: string; bu: string; customerName: string | null; status: string; contractAmount: number }
+type ProjLite = { id: number; code: string; name: string; bu: string; customerId: number; customerName: string | null; status: string; contractAmount: number }
 type DocRow = {
   id: number; type: string; code: string; title: string; sub: string
   total: number; issueDate: string; status: string; createdAt: string; imageCount: number
+  /** ลูกค้าของงานที่เอกสารผูกอยู่ — แยกจาก sub เพื่อให้กดชื่อดูเอกสารทั้งหมดของลูกค้าได้ (PO ไม่มี) */
+  customerId?: number | null; custName?: string | null
 }
 
 const stripC = (s: string) => s.replace(/[^\d]/g, '')
@@ -22,9 +25,10 @@ const fmtC = (s: string) => (s ? Number(s).toLocaleString('en-US') : '')
  * ศูนย์รวมเอกสารการเงิน — สร้างได้ทุกใบจากที่เดียว แล้วค่อยเลือกลูกค้า/งาน
  * ระบบดึงรายละเอียดที่เชื่อมโยงกัน (ใบเสนอ → งาน → งวด) มาให้เอง
  */
-export default function FinanceDocsView({ me, records, showToast, onChanged, onCreateQuote, onOpenProject }: {
+export default function FinanceDocsView({ me, records, showToast, onChanged, onCreateQuote, onOpenProject, onOpenCustomer }: {
   me: Me; records: Cust[]; showToast: (m: string) => void; onChanged: () => void
   onCreateQuote: (rec: { id: number }) => void; onOpenProject: (pid: number) => void
+  onOpenCustomer: (customerId: number) => void
 }) {
   const [billing, setBilling] = useState<DocRow[] | null>(null)
   const [pos, setPos] = useState<DocRow[] | null>(null)
@@ -49,7 +53,8 @@ export default function FinanceDocsView({ me, records, showToast, onChanged, onC
       const j = await rb.json()
       setBilling((j.docs as Record<string, never>[]).map((d) => ({
         id: d.id, type: d.kind, code: d.code, title: billKindMeta(d.kind).label,
-        sub: `${d.projectName}${d.custName ? ' · ' + d.custName : ''}${d.createdByName ? ' · โดย ' + d.createdByName : ''}`,
+        sub: `${d.projectName}${d.createdByName ? ' · โดย ' + d.createdByName : ''}`,
+        customerId: d.customerId ?? null, custName: d.custName ?? null,
         total: d.total, issueDate: d.issueDate, status: d.status, createdAt: d.createdAt, imageCount: d.imageCount || 0,
       })))
     }
@@ -143,7 +148,10 @@ export default function FinanceDocsView({ me, records, showToast, onChanged, onC
                   {d.status === 'ตีกลับ' && <span className="qchip" style={{ color: '#b0281c', background: '#f4dbd7', cursor: 'default' }}>ตีกลับ</span>}
                   {cancelled && <span className="qchip" style={{ color: '#b0281c', background: '#f4dbd7', cursor: 'default' }}>ยกเลิก</span>}
                 </div>
-                <div className="as">{thDate(d.issueDate)} · {d.sub}</div>
+                <div className="as">
+                  {thDate(d.issueDate)} · {d.sub}
+                  {d.custName && <> · <CustLink id={d.customerId} name={d.custName} onOpen={onOpenCustomer} /></>}
+                </div>
               </div>
               <div className="ad">฿{commas(d.total)}</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -175,7 +183,10 @@ export default function FinanceDocsView({ me, records, showToast, onChanged, onC
                     <div className="ab" style={{ background: 'var(--accent)' }} />
                     <div className="aw">
                       <div className="an">{p.name}</div>
-                      <div className="as">{p.code} · {p.customerName || '—'} · สัญญา ฿{commas(p.contractAmount)}</div>
+                      <div className="as">
+                        {p.code} · {p.customerName ? <CustLink id={p.customerId} name={p.customerName} onOpen={onOpenCustomer} /> : '—'}
+                        {' '}· สัญญา ฿{commas(p.contractAmount)}
+                      </div>
                     </div>
                     <span className="row-btn">เลือก</span>
                   </div>

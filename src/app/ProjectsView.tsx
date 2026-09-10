@@ -7,6 +7,7 @@ import {
 } from '@/lib/constants'
 import { commas, fmtB, thDate } from '@/lib/format'
 import { bizGroupedBars, bizProjectBars, bizSCurve, cumulative, pickImage, uiAlert, uiConfirm, uiPrompt, type ProjectRow, type ExpenseRow, type InstRow, type HistItem } from './biz-shared'
+import { CustLink } from './CustomerDocs'
 
 type Me = { id: number; email: string; name: string | null; image: string | null; role: Role; bu: string | null }
 type Cust = { id: number; code: string; bu: string; name: string | null; chname: string | null; province: string | null; status: string; shownVal: number | null; d: string | null; isFinal: boolean }
@@ -17,9 +18,10 @@ const stripC = (s: string) => s.replace(/[^\d]/g, '')
 const fmtC = (s: string) => (s ? Number(s).toLocaleString('en-US') : '')
 
 /* ================= รายการงานก่อสร้าง + ภาพรวมบริษัท ================= */
-export default function ProjectsView({ me, records, limitedData, showToast, onChanged, openProjectId, onOpenedProject }: {
+export default function ProjectsView({ me, records, limitedData, showToast, onChanged, openProjectId, onOpenedProject, onOpenCustomer }: {
   me: Me; records: Cust[]; limitedData?: boolean; showToast: (m: string) => void; onChanged: () => void
   openProjectId: number | null; onOpenedProject: () => void
+  onOpenCustomer: (customerId: number) => void
 }) {
   const [projects, setProjects] = useState<ProjectRow[] | null>(null)
   const [openId, setOpenId] = useState<number | null>(null)
@@ -131,7 +133,10 @@ export default function ProjectsView({ me, records, limitedData, showToast, onCh
                   {p.pendingCount > 0 && <span className="qchip" style={{ color: '#b58600', background: '#fbeec0', cursor: 'default' }}>รออนุมัติ {p.pendingCount}</span>}
                   {trash && <span className="qchip" style={{ color: '#b0281c', background: '#f4dbd7', cursor: 'default' }}>เหลือ {p.deletedAt ? daysLeft(p.deletedAt) : 30} วัน</span>}
                 </div>
-                <div className="as">{p.code} · {p.customerName || '—'} · {BU_NAMES[p.bu as keyof typeof BU_NAMES] || p.bu} · สัญญา ฿{commas(p.contractAmount)}{p.dueDate ? ' · กำหนดเสร็จ ' + thDate(p.dueDate) : ''}</div>
+                <div className="as">
+                  {p.code} · {p.customerName ? <CustLink id={p.customerId} name={p.customerName} onOpen={onOpenCustomer} /> : '—'}
+                  {' '}· {BU_NAMES[p.bu as keyof typeof BU_NAMES] || p.bu} · สัญญา ฿{commas(p.contractAmount)}{p.dueDate ? ' · กำหนดเสร็จ ' + thDate(p.dueDate) : ''}
+                </div>
                 <div className="pj-bars">
                   <div className="pj-bar"><span>รับเงิน {recPct.toFixed(0)}%</span><div className="prog"><i style={{ width: Math.min(100, recPct) + '%', background: '#2563c9' }} /></div><b>฿{fmtB(p.received)}</b></div>
                   <div className="pj-bar"><span>ใช้งบ {p.budgetTotal ? spendPct.toFixed(0) + '%' : '—'}</span><div className="prog"><i style={{ width: Math.min(100, spendPct) + '%', background: spendCol }} /></div><b>฿{fmtB(p.spent)}</b></div>
@@ -194,7 +199,7 @@ export default function ProjectsView({ me, records, limitedData, showToast, onCh
           onClose={() => setNewOpen(false)}
           onCreated={(pid) => { setNewOpen(false); load(); onChanged(); setOpenId(pid) }} />
       )}
-      {openId != null && <ProjectModal id={openId} me={me} showToast={showToast} onClose={() => setOpenId(null)} onChanged={() => { load(); onChanged() }} />}
+      {openId != null && <ProjectModal id={openId} me={me} showToast={showToast} onClose={() => setOpenId(null)} onChanged={() => { load(); onChanged() }} onOpenCustomer={onOpenCustomer} />}
     </>
   )
 }
@@ -382,8 +387,9 @@ type Detail = {
 /** ลิงก์เอกสารของลูกค้าที่แนบไว้กับงาน (Drive / ลิงก์แชร์ ฯลฯ) */
 type LinkRow = { id: number; title: string; url: string; createdAt: string; createdByName: string | null }
 
-export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
+export function ProjectModal({ id, me, onClose, onChanged, showToast, onOpenCustomer }: {
   id: number; me: Me; onClose: () => void; onChanged: () => void; showToast: (m: string) => void
+  onOpenCustomer?: (customerId: number) => void
 }) {
   const [d, setD] = useState<Detail | null>(null)
   const [tab, setTab] = useState<'overview' | 'inst' | 'exp' | 'budget' | 'bill' | 'docs'>('overview')
@@ -445,7 +451,10 @@ export function ProjectModal({ id, me, onClose, onChanged, showToast }: {
         <div className="modal-h">
           <div>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>{p.name}<span className="qchip" style={{ color: pm.c, background: pm.b, cursor: 'default' }}>{pm.k}</span></h3>
-            <div className="sub">{p.code} · {p.customerName || '—'} · {BU_NAMES[p.bu as keyof typeof BU_NAMES] || p.bu} · สัญญา ฿{commas(p.contractAmount)}{p.closedAt ? ` · ปิดงาน ${thDate(p.closedAt)} โดย ${p.closedByName || '—'}` : ''}</div>
+            <div className="sub">
+              {p.code} · {p.customerName ? <CustLink id={p.customerId} name={p.customerName} onOpen={onOpenCustomer} /> : '—'}
+              {' '}· {BU_NAMES[p.bu as keyof typeof BU_NAMES] || p.bu} · สัญญา ฿{commas(p.contractAmount)}{p.closedAt ? ` · ปิดงาน ${thDate(p.closedAt)} โดย ${p.closedByName || '—'}` : ''}
+            </div>
           </div>
           <button className="modal-x" onClick={onClose}>×</button>
         </div>

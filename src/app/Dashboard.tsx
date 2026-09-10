@@ -13,6 +13,7 @@ import ApprovalsView from './ApprovalsView'
 import OfficeExpensesView from './OfficeExpensesView'
 import FinanceDocsView from './FinanceDocsView'
 import { uiConfirm } from './biz-shared'
+import CustomerDocsModal, { CustLink } from './CustomerDocs'
 
 type Appt = { type: string; date: string; time: string; note: string } | null
 export type Rec = {
@@ -64,6 +65,8 @@ function RangePicker({ from, to, onFrom, onTo, onClear }: {
 /* ================================================================= */
 export default function Dashboard({ me }: { me: Me }) {
   const [records, setRecords] = useState<Rec[]>([])
+  // กล่องเอกสารของลูกค้า — เก็บเป็น id ไม่ใช่ทั้งแถว เพราะหน้าอื่นมีแค่ id และรายการลูกค้าที่โหลดไว้จำกัดแค่ 3 เดือน
+  const [docsFor, setDocsFor] = useState<number | null>(null)
   const [rates, setRates] = useState<Record<string, number>>(DEFAULT_RATES)
   const [meta, setMeta] = useState<Meta | null>(null)
   const [loading, setLoading] = useState(true)
@@ -171,23 +174,24 @@ export default function Dashboard({ me }: { me: Me }) {
         </div>
         <div className="content">
           {view === 'overview' && <Overview records={records} meta={meta} />}
-          {view === 'alerts' && <Alerts records={records} onManage={setManage} />}
+          {view === 'alerts' && <Alerts records={records} onManage={setManage} onOpenDocs={setDocsFor} />}
           {view === 'intake' && <Intake records={records} />}
           {view === 'regions' && <Regions records={records} />}
-          {view === 'quotes' && <QuotesView me={me} records={records} limitedData={range === '3m'} openQuoteId={gotoQuoteId} onOpenedQuote={() => setGotoQuoteId(null)} showToast={showToast} onChanged={bizChanged} onOpenProject={openProject} />}
-          {view === 'projects' && <ProjectsView me={me} records={records} limitedData={range === '3m'} showToast={showToast} onChanged={bizChanged} openProjectId={gotoProjectId} onOpenedProject={() => setGotoProjectId(null)} />}
-          {view === 'finance' && <FinanceDocsView me={me} records={records} showToast={showToast} onChanged={bizChanged} onCreateQuote={createQuoteFor} onOpenProject={openProject} />}
+          {view === 'quotes' && <QuotesView me={me} records={records} limitedData={range === '3m'} openQuoteId={gotoQuoteId} onOpenedQuote={() => setGotoQuoteId(null)} showToast={showToast} onChanged={bizChanged} onOpenProject={openProject} onOpenCustomer={setDocsFor} />}
+          {view === 'projects' && <ProjectsView me={me} records={records} limitedData={range === '3m'} showToast={showToast} onChanged={bizChanged} openProjectId={gotoProjectId} onOpenedProject={() => setGotoProjectId(null)} onOpenCustomer={setDocsFor} />}
+          {view === 'finance' && <FinanceDocsView me={me} records={records} showToast={showToast} onChanged={bizChanged} onCreateQuote={createQuoteFor} onOpenProject={openProject} onOpenCustomer={setDocsFor} />}
           {view === 'office' && <OfficeExpensesView me={me} showToast={showToast} onChanged={bizChanged} />}
           {view === 'approvals' && <ApprovalsView me={me} showToast={showToast} onChanged={bizChanged} onOpenProject={openProject} />}
           {view === 'users' && canManageUsers(me.role) && <UsersView me={me} showToast={showToast} />}
           {view === 'customers' && (
-            <Customers records={records} editable={editable} canDelete={isAdminUp(me.role)} onManage={setManage} onAdd={() => setAddOpen(true)} onCreateQuote={createQuoteFor}
+            <Customers records={records} editable={editable} canDelete={isAdminUp(me.role)} onManage={setManage} onAdd={() => setAddOpen(true)} onCreateQuote={createQuoteFor} onOpenDocs={setDocsFor}
               onDelete={async (rec) => { const r = await fetch(`/api/customers/${rec.id}`, { method: 'DELETE' }); if (r.ok) { showToast('ลบ ' + rec.code + ' แล้ว'); load() } else showToast((await r.json()).error || 'ลบไม่สำเร็จ') }}
               patch={async (id, body) => { const r = await fetch(`/api/customers/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); if (r.ok) { showToast('อัปเดตแล้ว'); load() } else showToast((await r.json()).error || 'ผิดพลาด') }} />
           )}
         </div>
       </div>
 
+      {docsFor != null && <CustomerDocsModal customerId={docsFor} onClose={() => setDocsFor(null)} />}
       {manage && <ManageModal rec={manage} me={me} rateOf={rateOf} onClose={() => setManage(null)} onSaved={() => { setManage(null); load() }} showToast={showToast} onCreateQuote={editable ? () => createQuoteFor(manage) : undefined} />}
       {addOpen && <AddModal records={records} rateOf={rateOf} onClose={() => setAddOpen(false)} onSaved={() => { setAddOpen(false); load() }} showToast={showToast} />}
       {ratesOpen && <RatesModal rates={rates} onClose={() => setRatesOpen(false)} onSaved={(r) => { setRates(r); setRatesOpen(false); load() }} showToast={showToast} />}
@@ -390,7 +394,7 @@ function Tile({ rail, lab, big, unit, foot, prog }: { rail: string; lab: string;
 }
 
 /* ---------------- Alerts ---------------- */
-function Alerts({ records, onManage }: { records: Rec[]; onManage: (r: Rec) => void }) {
+function Alerts({ records, onManage, onOpenDocs }: { records: Rec[]; onManage: (r: Rec) => void; onOpenDocs: (id: number) => void }) {
   const now = NOW()
   const appts = records.filter((r) => r.appt?.date).map((r) => ({ r, dd: daysBetween(now, toMs(r.appt!.date)) }))
   const overdue = appts.filter((x) => x.dd < 0 && !isFinal(x.r.status) && x.r.status !== 'ไม่สนใจ / ปิดไม่ได้').sort((a, b) => b.dd - a.dd)
@@ -406,7 +410,7 @@ function Alerts({ records, onManage }: { records: Rec[]; onManage: (r: Rec) => v
     return (
       <div className="arow" key={x.r.id}>
         <div className="ab" style={{ background: col }} />
-        <div className="aw"><div className="an">{x.r.name || x.r.chname || x.r.code}{phoneTag(x.r)}</div><div className="as">{t} · {thDate(a.date)}{a.time ? ' ' + a.time + ' น.' : ''} · {BU_NAMES[x.r.bu as keyof typeof BU_NAMES]}{a.note ? ' · ' + a.note : ''}</div></div>
+        <div className="aw"><div className="an"><CustLink id={x.r.id} name={x.r.name || x.r.chname || x.r.code} onOpen={onOpenDocs} />{phoneTag(x.r)}</div><div className="as">{t} · {thDate(a.date)}{a.time ? ' ' + a.time + ' น.' : ''} · {BU_NAMES[x.r.bu as keyof typeof BU_NAMES]}{a.note ? ' · ' + a.note : ''}</div></div>
         <div className="ad" style={{ color: col }}>{rel}</div>
         <button className="row-btn" onClick={() => onManage(x.r)}>จัดการ</button>
       </div>
@@ -415,7 +419,7 @@ function Alerts({ records, onManage }: { records: Rec[]; onManage: (r: Rec) => v
   const leadRow = (r: Rec, note: string, col: string, days: number) => (
     <div className="arow" key={r.id}>
       <div className="ab" style={{ background: col }} />
-      <div className="aw"><div className="an">{r.name || r.chname || r.code}{phoneTag(r)}</div><div className="as">{note}</div></div>
+      <div className="aw"><div className="an"><CustLink id={r.id} name={r.name || r.chname || r.code} onOpen={onOpenDocs} />{phoneTag(r)}</div><div className="as">{note}</div></div>
       <div className="ad" style={{ color: days > 14 ? 'var(--accent)' : col }}>{days === 0 ? 'วันนี้' : `${days} วัน`}</div>
       <button className="row-btn" onClick={() => onManage(r)}>จัดการ</button>
     </div>
@@ -541,9 +545,9 @@ function Regions({ records }: { records: Rec[] }) {
 
 /* ---------------- Customers table ---------------- */
 type SortKey = 'code' | 'name' | 'detail' | 'sqm' | 'status' | 'quote' | 'apptDate' | 'd' | 'amount'
-function Customers({ records, editable, canDelete, onManage, onAdd, onCreateQuote, onDelete, patch }: {
+function Customers({ records, editable, canDelete, onManage, onAdd, onCreateQuote, onOpenDocs, onDelete, patch }: {
   records: Rec[]; editable: boolean; canDelete: boolean; onManage: (r: Rec) => void; onAdd: () => void
-  onCreateQuote: (r: Rec) => void
+  onCreateQuote: (r: Rec) => void; onOpenDocs: (id: number) => void
   onDelete: (r: Rec) => Promise<void>
   patch: (id: number, body: Record<string, unknown>) => Promise<void>
 }) {
@@ -642,7 +646,9 @@ function Customers({ records, editable, canDelete, onManage, onAdd, onCreateQuot
               return (
                 <tr key={r.id}>
                   <td className="code">{r.code.replace('QT-', '')}</td>
-                  <td className="name">{r.name || r.chname || <span style={{ color: 'var(--text-faint)' }}>(ไม่ระบุชื่อ)</span>}{!r.code.startsWith('QT-') && <span className="tag-new">ใหม่</span>}{r.attachCount > 0 && <span className="clip"> <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M21 12l-9 9a5.5 5.5 0 01-8-8l9-9a3.7 3.7 0 015 5l-9 9a1.8 1.8 0 01-3-2l8-8" /></svg>{r.attachCount}</span>}{phoneTag(r)}{chanTag(r)}{r.province && <span className="prov">{r.province}</span>}</td>
+                  <td className="name">{r.name || r.chname
+                    ? <CustLink id={r.id} name={r.name || r.chname || ''} onOpen={onOpenDocs} />
+                    : <span style={{ color: 'var(--text-faint)' }}>(ไม่ระบุชื่อ)</span>}{!r.code.startsWith('QT-') && <span className="tag-new">ใหม่</span>}{r.attachCount > 0 && <span className="clip"> <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M21 12l-9 9a5.5 5.5 0 01-8-8l9-9a3.7 3.7 0 015 5l-9 9a1.8 1.8 0 01-3-2l8-8" /></svg>{r.attachCount}</span>}{phoneTag(r)}{chanTag(r)}{r.province && <span className="prov">{r.province}</span>}</td>
                   <td className="biz">{r.detail ? <span className="dtl" title={r.detail}>{r.detail}</span> : <span className="dtl" style={{ color: 'var(--text-faint)' }}>—</span>}<span className="cat">{r.cat || 'ไม่ระบุ'}</span></td>
                   <td className="size">{sizeCell(r)}</td>
                   <td>{editable ? <button className="pill" style={{ color: sm.c, background: sm.b }} onClick={(e) => openPop(e, r, 'status')}><i style={{ background: sm.c }} />{sm.k}<svg className="pcar" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6}><path d="M6 9l6 6 6-6" /></svg></button> : <span className="pill" style={{ color: sm.c, background: sm.b, cursor: 'default' }}><i style={{ background: sm.c }} />{sm.k}</span>}</td>

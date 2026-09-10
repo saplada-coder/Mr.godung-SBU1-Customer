@@ -14,7 +14,7 @@ export async function GET() {
   const db = getDb()
   const [rows, projs, allUsers, imgCounts] = await Promise.all([
     db.select().from(billingDocs).orderBy(desc(billingDocs.id)),
-    db.select({ id: projects.id, name: projects.name, code: projects.code }).from(projects),
+    db.select({ id: projects.id, name: projects.name, code: projects.code, customerId: projects.customerId }).from(projects),
     db.select({ id: users.id, name: users.name, email: users.email }).from(users),
     db.select({ docId: billingDocImages.docId, n: sql<number>`count(*)::int` }).from(billingDocImages).groupBy(billingDocImages.docId),
   ])
@@ -24,6 +24,8 @@ export async function GET() {
   return NextResponse.json({
     docs: rows.map((d) => ({
       id: d.id, kind: d.kind, code: d.code, custName: d.custName,
+      // ลูกค้าของเอกสารมาจากงานที่เอกสารผูกอยู่ — custName บนเอกสารเป็นชื่อที่คัดลอกไว้ตอนออกใบ ไม่ใช่ข้อมูลลูกค้าจริง
+      customerId: projMap.get(d.projectId)?.customerId ?? null,
       projectId: d.projectId, projectName: projMap.get(d.projectId)?.name || projMap.get(d.projectId)?.code || '—',
       issueDate: d.issueDate, dueDate: d.dueDate, payDate: d.payDate, payMethod: d.payMethod,
       total: n0(d.total), vatAmount: n0(d.vatAmount), whtAmount: n0(d.whtAmount),
