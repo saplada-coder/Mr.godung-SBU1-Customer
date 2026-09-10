@@ -9,8 +9,9 @@ import { useState } from 'react'
  * ไลน์ส่วนตัวไม่มี API ให้ส่งไฟล์แทนคนได้ ตัวเอกสารจึงไปเป็นไฟล์ PDF ที่พนักงานแนบเองในแชท
  * ปุ่มนี้ทำสองอย่าง: เปิดหน้าต่างบันทึก PDF และมาร์กว่าส่งลูกค้าแล้ว
  *
- * เอกสารที่ส่งลูกค้าได้จะมีปุ่มเดียว ไม่แยก "ส่งไลน์" กับ "พิมพ์" เพราะทั้งคู่เปิดหน้าต่างบันทึก PDF เหมือนกัน
- * มีสองปุ่มแล้วคนใหม่ไม่รู้ว่าต้องกดอันไหน · หน้าใบวางบิลกับ PO ไม่มีปุ่มส่ง จึงเหลือปุ่มพิมพ์ตามเดิม
+ * สองปุ่มของเอกสารที่ส่งลูกค้าทำคนละหน้าที่ ไม่ใช่สองทางไปที่เดียวกันแบบเดิมที่ทำให้คนใหม่ต้องเดา
+ * "บันทึก PDF ส่งลูกค้า" = ได้ไฟล์ · "เปิดไลน์" = เรียกแอป LINE ขึ้นมาให้ไปแนบไฟล์ต่อ
+ * หน้าใบวางบิลกับ PO ไม่ได้ส่งลูกค้าทางนี้ จึงเหลือปุ่มพิมพ์ตามเดิม
  *
  * window.print() ต้องถูกเรียกในจังหวะที่กดปุ่มจริง ๆ ห้ามมี await คั่นก่อน
  * ไม่งั้นเบราว์เซอร์จะถือว่าไม่ได้มาจากการกดปุ่มแล้วบล็อกทิ้งเงียบ ๆ — การมาร์กว่าส่งแล้วจึงยิงเป็นงานเบื้องหลัง
@@ -18,6 +19,7 @@ import { useState } from 'react'
 export default function PrintToolbar({ shareApi }: { shareApi?: string }) {
   const [err, setErr] = useState('')
   const [sent, setSent] = useState(false)
+  const [lineTried, setLineTried] = useState(false)
 
   const sendLine = () => {
     setErr('')
@@ -28,15 +30,26 @@ export default function PrintToolbar({ shareApi }: { shareApi?: string }) {
     window.print()
   }
 
+  /**
+   * เรียกแอป LINE บนเครื่องขึ้นมา (โปรโตคอล line:// ที่ทั้ง Windows, iOS และ Android รู้จัก)
+   * ได้แค่เปิดแอป — เลือกแชทและแนบไฟล์ยังต้องทำเอง เพราะไลน์ส่วนตัวไม่มี API ให้ส่งแทน
+   * เครื่องที่ไม่ได้ติดตั้งไลน์จะไม่มีอะไรเกิดขึ้น จึงบอกวิธีเปิดเองไว้ให้ด้วย
+   */
+  const openLine = () => {
+    setLineTried(true)
+    window.location.href = 'line://'
+  }
+
   return (
     <div className="ptoolbar">
       {err && <div className="pmsg err">{err}</div>}
+      {lineTried && <div className="pmsg">ถ้าแอป LINE ไม่เปิดขึ้นมา แปลว่าเครื่องนี้ยังไม่ได้ติดตั้ง — เปิดจากหน้าจอเองแล้วแนบไฟล์ได้เลย</div>}
       {sent && (
         <div className="pshare">
           <b>เหลืออีก 2 ขั้นตอน</b>
           <ol className="psteps">
             <li>ในหน้าต่างที่เปิดขึ้น เลือกปลายทางเป็น <b>บันทึกเป็น PDF</b> แล้วกด Save</li>
-            <li>เปิดแชทลูกค้าในแอป LINE แล้ว<b>แนบไฟล์ที่เพิ่งบันทึก</b> (ชื่อไฟล์คือเลขที่เอกสาร + ชื่อลูกค้า)</li>
+            <li>กด <b>💬 เปิดไลน์</b> แล้วเลือกแชทลูกค้า <b>แนบไฟล์ที่เพิ่งบันทึก</b> (ชื่อไฟล์คือเลขที่เอกสาร + ชื่อลูกค้า)</li>
           </ol>
           <div className="row">
             <button onClick={() => window.print()}>บันทึกเป็น PDF อีกครั้ง</button>
@@ -45,9 +58,14 @@ export default function PrintToolbar({ shareApi }: { shareApi?: string }) {
         </div>
       )}
       <button onClick={() => window.close()}>ปิด</button>
-      {shareApi
-        ? <button className="line" onClick={sendLine}>📄 บันทึก PDF ส่งลูกค้า</button>
-        : <button onClick={() => window.print()}>🖨 พิมพ์ / บันทึก PDF</button>}
+      {shareApi ? (
+        <>
+          <button onClick={sendLine}>📄 บันทึก PDF ส่งลูกค้า</button>
+          <button className="line" onClick={openLine}>💬 เปิดไลน์</button>
+        </>
+      ) : (
+        <button onClick={() => window.print()}>🖨 พิมพ์ / บันทึก PDF</button>
+      )}
     </div>
   )
 }
