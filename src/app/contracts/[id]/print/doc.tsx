@@ -4,6 +4,7 @@ import { contracts, contractInstallments, quotations, customers } from '@/db/sch
 import { getSettingsFor } from '@/lib/settings'
 import { n0, num } from '@/lib/biz'
 import { bahtText, thDateBE } from '@/lib/format'
+import FitPages from '../../../fit-pages'
 
 /**
  * สัญญาว่าจ้างรับเหมาก่อสร้าง — จัดหน้าตามฟอร์มสัญญาจริงของบริษัท
@@ -90,10 +91,11 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
   return (
     <div className="ctr">
       <style>{CONTRACT_CSS}</style>
+      <FitPages />
       {toolbar}
 
       {/* ---------- หน้าปก ---------- */}
-      <div className="page cover">
+      <div className="page cover"><div className="pg-fit"><div className="pg-in">
         <div className="orig">ต้นฉบับ</div>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {s.logoUrl && <img className="logo" src={s.logoUrl} alt="" />}
@@ -109,10 +111,10 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
           <div className="b big">{employer || '(ยังไม่ระบุผู้ว่าจ้าง)'}</div>
           {c.siteAddress && <div className="b big">{c.siteAddress}</div>}
         </div>
-      </div>
+      </div></div></div>
 
       {/* ---------- ข้อ 1-3 ---------- */}
-      <div className="page">
+      <div className="page"><div className="pg-fit"><div className="pg-in">
         <div className="orig">ต้นฉบับ</div>
         <h3 className="doc-h">{c.projectName || 'โครงการก่อสร้าง'}</h3>
 
@@ -174,10 +176,10 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
           ทั้งนี้ผู้รับจ้างจะต้องทำการชี้แจงกับทางผู้ว่าจ้างก่อนการดำเนินการตลอดเป็นระยะ
         </Cl>
         <Cl n="3.2">ผู้รับจ้างจะต้องมีหน้าที่คอยประสานงานและควบคุมงานก่อสร้างประจำอยู่ที่สถานที่ก่อสร้างเวลางานที่จ้าง</Cl>
-      </div>
+      </div></div></div>
 
       {/* ---------- ข้อ 4-5 ---------- */}
-      <div className="page">
+      <div className="page"><div className="pg-fit"><div className="pg-in">
         <div className="orig">ต้นฉบับ</div>
         <div className="cl-h">4. เขตก่อสร้างและการสำรวจสภาพพื้นที่ข้างเคียง</div>
         <Cl n="4.1">
@@ -203,10 +205,10 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
           โดยผู้รับจ้างเป็นผู้รับผิดชอบค่าใช้จ่ายเอง
         </Cl>
         <Cl n="5.4">หากผู้รับจ้างมีการใช้แรงงานที่เป็นบุคคลต่างด้าว ทางผู้รับจ้างจะต้องเป็นผู้ดำเนินการขออนุญาตขึ้นทะเบียนต่อกรมแรงงาน</Cl>
-      </div>
+      </div></div></div>
 
       {/* ---------- ข้อ 6 มูลค่าสัญญาและงวดงาน ---------- */}
-      <div className="page">
+      <div className="page"><div className="pg-fit"><div className="pg-in">
         <div className="orig">ต้นฉบับ</div>
         <div className="cl-h">6. มูลค่าสัญญา, งวดงานและการเบิกจ่ายงวดงาน</div>
         <Cl n="6.1">มูลค่าค่าก่อสร้างทั้งหมด (Lump Sum Cost) <b>{fmt(amount)}</b> บาท</Cl>
@@ -262,10 +264,10 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
           ผู้รับจ้างจะต้องเป็นผู้รับผิดชอบทั้งสิ้น โดยจะเรียกร้องใด ๆ จากผู้ว่าจ้างไม่ได้
           <span className="red"> เว้นแต่เหตุที่ได้รับความเสียหายนั้นเกิดขึ้นโดยความประมาทของบุคคลนั้น ๆ เอง</span>
         </p>
-      </div>
+      </div></div></div>
 
       {/* ---------- ข้อ 7-11 + ลงนาม ---------- */}
-      <div className="page">
+      <div className="page"><div className="pg-fit"><div className="pg-in">
         <div className="orig">ต้นฉบับ</div>
         <div className="cl-h">7. อัตราค่าปรับ</div>
         <p className="ind">
@@ -314,10 +316,10 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
           สุดท้ายนี้ผู้ว่าจ้าง หวังเป็นอย่างยิ่งว่าผู้รับจ้างจะสามารถดำเนินการได้อย่างมีประสิทธิภาพและสำเร็จตามวัตถุประสงค์ของโครงการต่อไป
         </p>
         {sign}
-      </div>
+      </div></div></div>
 
       {/* ---------- เงื่อนไขของสัญญา ข้อ 1-3 ---------- */}
-      <div className="page">
+      <div className="page"><div className="pg-fit"><div className="pg-in">
         <div className="orig">ต้นฉบับ</div>
         <h3 className="doc-h">เงื่อนไขของสัญญา</h3>
 
@@ -370,10 +372,10 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
           ผู้รับจ้างจะต้องรับผิดชอบในบรรดาสิทธิเรียกร้องค่าเสียหาย ค่าใช้จ่าย ตลอดถึงการเรียกร้องอื่นโดยบุคคลที่สาม
           อันเกิดจากความผิดพลาด การละเมิด หรือการละเว้นไม่กระทำการอันควรของผู้รับจ้าง หรือของลูกจ้าง/พนักงาน/ผู้รับเหมาช่วงของผู้รับจ้าง
         </Cl>
-      </div>
+      </div></div></div>
 
       {/* ---------- เงื่อนไขของสัญญา ข้อ 4-7 + ลงนาม ---------- */}
-      <div className="page">
+      <div className="page"><div className="pg-fit"><div className="pg-in">
         <div className="orig">ต้นฉบับ</div>
         <div className="cl-h">4. ความรับผิดชอบของผู้ว่าจ้าง</div>
         <Cl n="4.1">ผู้ว่าจ้างจะส่งมอบพื้นที่เพื่อผู้รับจ้างสามารถเริ่มปฏิบัติงานได้ตามเงื่อนไขแห่งสัญญานี้ภายใน <b>{startWithin}</b> วัน</Cl>
@@ -406,7 +408,7 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
           จึงได้ลงลายมือชื่อพร้อมประทับตราไว้เป็นสำคัญต่อหน้าพยาน และคู่สัญญาต่างยึดถือไว้ฝ่ายละฉบับ
         </p>
         {sign}
-      </div>
+      </div></div></div>
     </div>
   )
 }
@@ -445,7 +447,10 @@ export const CONTRACT_CSS = `
 .ctr table.inst .inote{color:#555;font-size:12px}
 .ctr table.inst tr.sum td{background:#fbf3d2;border-bottom:none}
 .ctr .star{text-align:center;font-weight:700;margin:8px 0 12px}
-.ctr .ct-signs{display:grid;grid-template-columns:1fr 1fr;gap:26px 20px;margin-top:30px;text-align:center;font-size:12.5px;line-height:2}
+/* FitPages ตั้ง transform/width ให้ .pg-in และความสูงให้ .pg-fit เอง ที่นี่ตั้งแค่จุดหมุน */
+.ctr .pg-in{transform-origin:top left}
+/* กันบล็อกลายเซ็นถูกผ่าครึ่งคนละหน้า เผื่อกรณีที่ย่อจนสุดเพดานแล้วยังไม่พอ */
+.ctr .ct-signs{display:grid;grid-template-columns:1fr 1fr;gap:26px 20px;margin-top:30px;text-align:center;font-size:12.5px;line-height:2;break-inside:avoid;page-break-inside:avoid}
 .ctr .ptoolbar{position:fixed;top:12px;right:14px;display:flex;gap:8px;align-items:flex-start;z-index:50;flex-wrap:wrap;justify-content:flex-end}
 .ctr .ptoolbar button{background:#111;color:#fff;border:none;border-radius:9px;padding:10px 16px;font-weight:700;font-size:13.5px;cursor:pointer;font-family:inherit}
 .ctr .ptoolbar button:hover{background:#333}

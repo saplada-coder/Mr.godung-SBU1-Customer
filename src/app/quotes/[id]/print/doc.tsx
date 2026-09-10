@@ -4,6 +4,7 @@ import { quotations, quotationItems, quotationInstallments, customers, users } f
 import { getSettingsFor } from '@/lib/settings'
 import { quoteTotals, n0 } from '@/lib/biz'
 import { fmtPhone, thDateBE as thd } from '@/lib/format'
+import FitPages from '../../../fit-pages'
 
 /**
  * เอกสารใบเสนอราคาแบบพิมพ์ — ใช้ร่วมกันสองทาง
@@ -86,10 +87,11 @@ export default function QuoteDoc({ data, toolbar }: { data: QuoteDocData; toolba
     <div className="qprint">
       {/* ไฟล์นี้จัดหน้าตามฟอร์มใบเสนอราคาจริงของบริษัท — พิมพ์เป็น PDF จากเบราว์เซอร์ได้เลย */}
       <style>{PRINT_CSS}</style>
+      <FitPages />
       {toolbar}
 
       {/* ---------- หน้า 1: ใบเสนอราคา ---------- */}
-      <div className="page">
+      <div className="page"><div className="pg-fit"><div className="pg-in">
         <div className="doc-title">ใบเสนอราคา/Quotation<span className="orig">(ต้นฉบับ)</span></div>
         <div className="head">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -168,11 +170,11 @@ export default function QuoteDoc({ data, toolbar }: { data: QuoteDocData; toolba
         )}
         {q.note && <div className="pre note-extra">{q.note}</div>}
         {signBlock}
-      </div>
+      </div></div></div>
 
       {/* ---------- หน้า 2: งวดงาน ---------- */}
       {sortedInsts.length > 0 && (
-        <div className="page">
+        <div className="page"><div className="pg-fit"><div className="pg-in">
           <div className="sec-t big">รายการแสดงการงวดงาน</div>
           <table className="inst-head"><tbody>
             <tr><td className="b">OWNER</td><td className="hl3 b">ค่าก่อสร้าง</td><td className="hl3 r b">{fmt(t.total)}</td><td className="hl3 b">บาท</td></tr>
@@ -210,17 +212,17 @@ export default function QuoteDoc({ data, toolbar }: { data: QuoteDocData; toolba
             </div>
           )}
           {signBlock}
-        </div>
+        </div></div></div>
       )}
 
       {/* ---------- หน้า 3+: รูปผลงาน ---------- */}
       {printImages.length > 0 && (
-        <div className="page">
+        <div className="page"><div className="pg-fit"><div className="pg-in">
           {printImages.map((src, i) => (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img className="pf" key={i} src={src} alt="" />
           ))}
-        </div>
+        </div></div></div>
       )}
     </div>
   )
@@ -269,7 +271,10 @@ export const PRINT_CSS = `
 .qprint .grand td{font-weight:700}
 .qprint .spec{border:1px solid #333;border-top:none;padding:9px 12px;font-size:11.5px}
 .qprint .note-extra{margin-top:8px;font-size:11.5px}
-.qprint .signs{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:26px;text-align:center;font-size:11.5px}
+/* FitPages ตั้ง transform/width ให้ .pg-in และความสูงให้ .pg-fit เอง ที่นี่ตั้งแค่จุดหมุน */
+.qprint .pg-in{transform-origin:top left}
+/* กันบล็อกลายเซ็นถูกผ่าครึ่งคนละหน้า เผื่อกรณีที่ย่อจนสุดเพดานแล้วยังไม่พอ */
+.qprint .signs{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:26px;text-align:center;font-size:11.5px;break-inside:avoid;page-break-inside:avoid}
 .qprint .sig-space{height:34px}
 .qprint .sig-img{height:34px;object-fit:contain;display:block;margin:0 auto}
 .qprint table.inst-head{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
