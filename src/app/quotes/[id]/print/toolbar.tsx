@@ -31,19 +31,23 @@ export default function PrintToolbar({ shareApi }: { shareApi?: string }) {
   }
 
   /**
-   * เรียกแอป LINE บนเครื่องขึ้นมา (โปรโตคอล line:// ที่ทั้ง Windows, iOS และ Android รู้จัก)
+   * เรียกแอป LINE ขึ้นมาที่หน้ารายการแชท
+   * ต้องระบุคำสั่ง nv/chat ให้ครบ — ส่ง "line://" เปล่า ๆ แอปเปิดขึ้นจริงแต่ไม่รู้ว่าจะทำอะไร
+   * แล้วตกไปที่หน้าให้สแกน QR ซึ่ง QR นั้นบรรจุคำสั่งเปล่าอันเดิม สแกนแล้วก็ขึ้นว่าเชื่อมต่อไม่ได้
+   *
+   * มือถือใช้ลิงก์ https ของไลน์เอง (universal link) ซึ่ง iOS/Android ส่งต่อให้แอปได้แน่นอนกว่าโปรโตคอลตรง ๆ
    * ได้แค่เปิดแอป — เลือกแชทและแนบไฟล์ยังต้องทำเอง เพราะไลน์ส่วนตัวไม่มี API ให้ส่งแทน
-   * เครื่องที่ไม่ได้ติดตั้งไลน์จะไม่มีอะไรเกิดขึ้น จึงบอกวิธีเปิดเองไว้ให้ด้วย
    */
   const openLine = () => {
     setLineTried(true)
-    window.location.href = 'line://'
+    const mobile = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent)
+    window.location.href = mobile ? 'https://line.me/R/nv/chat' : 'line://nv/chat'
   }
 
   return (
     <div className="ptoolbar">
       {err && <div className="pmsg err">{err}</div>}
-      {lineTried && <div className="pmsg">ถ้าแอป LINE ไม่เปิดขึ้นมา แปลว่าเครื่องนี้ยังไม่ได้ติดตั้ง — เปิดจากหน้าจอเองแล้วแนบไฟล์ได้เลย</div>}
+      {lineTried && <div className="pmsg">ถ้าแอป LINE ไม่เปิดขึ้นมา หรือขึ้นหน้าให้สแกน QR ให้เปิดแอปจากหน้าจอเองแล้วแนบไฟล์ได้เลย</div>}
       {sent && (
         <div className="pshare">
           <b>เหลืออีก 2 ขั้นตอน</b>
