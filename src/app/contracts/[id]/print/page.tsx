@@ -10,5 +10,5 @@ export default async function ContractPrintPage({ params }: { params: Promise<{ 
   if (!me || !me.active) redirect('/sign-in')
   const data = await loadContract(Number((await params).id))
   if (!data) notFound()
-  return <ContractDoc data={data} toolbar={<PrintToolbar />} />
+  return <ContractDoc data={data} toolbar={<PrintToolbar shareApi={`/api/contracts/${data.c.id}/share`} />} />
 }

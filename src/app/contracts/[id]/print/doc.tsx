@@ -447,8 +447,6 @@ export const CONTRACT_CSS = `
 .ctr table.inst .inote{color:#555;font-size:12px}
 .ctr table.inst tr.sum td{background:#fbf3d2;border-bottom:none}
 .ctr .star{text-align:center;font-weight:700;margin:8px 0 12px}
-/* FitPages ตั้ง transform/width ให้ .pg-in และความสูงให้ .pg-fit เอง ที่นี่ตั้งแค่จุดหมุน */
-.ctr .pg-in{transform-origin:top left}
 /* กันบล็อกลายเซ็นถูกผ่าครึ่งคนละหน้า เผื่อกรณีที่ย่อจนสุดเพดานแล้วยังไม่พอ */
 .ctr .ct-signs{display:grid;grid-template-columns:1fr 1fr;gap:26px 20px;margin-top:30px;text-align:center;font-size:12.5px;line-height:2;break-inside:avoid;page-break-inside:avoid}
 /* กันช่องลายเซ็นแต่ละช่องถูกผ่าเองด้วย — เบราว์เซอร์บางตัวไม่สนใจ break-inside ที่ตัว grid แต่สนใจที่ลูก */
@@ -456,6 +454,14 @@ export const CONTRACT_CSS = `
 .ctr .ptoolbar{position:fixed;top:12px;right:14px;display:flex;gap:8px;align-items:flex-start;z-index:50;flex-wrap:wrap;justify-content:flex-end}
 .ctr .ptoolbar button{background:#111;color:#fff;border:none;border-radius:9px;padding:10px 16px;font-weight:700;font-size:13.5px;cursor:pointer;font-family:inherit}
 .ctr .ptoolbar button:hover{background:#333}
+.ctr .ptoolbar button.line{background:#06c755}
+.ctr .ptoolbar button.line:hover{background:#05a948}
+.ctr .ptoolbar .pmsg{background:#fff;color:#111;border-radius:9px;padding:8px 12px;font-size:12.5px;max-width:340px;box-shadow:0 2px 10px rgba(0,0,0,.3)}
+.ctr .ptoolbar .pmsg.err{background:#ffe2e0;color:#8f2018}
+.ctr .ptoolbar .pshare{background:#fff;color:#111;border-radius:11px;padding:11px 12px;width:330px;font-size:12.5px;line-height:1.5;text-align:left;display:flex;flex-direction:column;gap:8px;box-shadow:0 2px 12px rgba(0,0,0,.35)}
+.ctr .ptoolbar .pshare ol.psteps{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:5px}
+.ctr .ptoolbar .pshare .row{display:flex;gap:6px;flex-wrap:wrap}
+.ctr .ptoolbar .pshare button{padding:7px 11px;font-size:12.5px;border-radius:7px}
 @media print{
   .ctr{background:#fff;padding:0}
   .ctr .page{box-shadow:none;margin:0;width:auto;min-height:0;page-break-after:always}

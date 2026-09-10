@@ -3,36 +3,26 @@
 import { useState } from 'react'
 
 /**
- * แถบปุ่มลอยบนหน้าพิมพ์ (ซ่อนอัตโนมัติตอนพิมพ์) — ใช้ร่วมกับหน้าพิมพ์ใบวางบิลและ PO ด้วย
- * ส่ง quoteId มาเฉพาะใบเสนอราคา จะได้ปุ่ม "ส่งไลน์" เพิ่ม
+ * แถบปุ่มลอยบนหน้าพิมพ์ — ใช้ร่วมกับหน้าพิมพ์ใบเสนอราคา สัญญา ใบวางบิล และ PO
+ * ส่ง shareApi มาเฉพาะเอกสารที่ส่งให้ลูกค้าได้ (ใบเสนอราคา/สัญญา) จะได้ปุ่ม "ส่งไลน์" เพิ่ม
  *
- * ไลน์ส่วนตัวไม่มี API ให้ส่งไฟล์แทนคนได้ ตัวใบจึงไปเป็นไฟล์ PDF ที่พนักงานแนบเองในแชท
- * ปุ่มนี้เลยรวบขั้นตอนให้: มาร์กว่าส่งลูกค้าแล้ว · ก๊อบข้อความไว้ให้ · เปิดหน้าต่างบันทึก PDF ให้เลย
+ * ไลน์ส่วนตัวไม่มี API ให้ส่งไฟล์แทนคนได้ ตัวเอกสารจึงไปเป็นไฟล์ PDF ที่พนักงานแนบเองในแชท
+ * ปุ่มนี้ทำสองอย่าง: เปิดหน้าต่างบันทึก PDF และมาร์กว่าส่งลูกค้าแล้ว
+ *
+ * window.print() ต้องถูกเรียกในจังหวะที่กดปุ่มจริง ๆ ห้ามมี await คั่นก่อน
+ * ไม่งั้นเบราว์เซอร์จะถือว่าไม่ได้มาจากการกดปุ่มแล้วบล็อกทิ้งเงียบ ๆ — การมาร์กว่าส่งแล้วจึงยิงเป็นงานเบื้องหลัง
  */
-export default function PrintToolbar({ quoteId }: { quoteId?: number }) {
-  const [busy, setBusy] = useState(false)
+export default function PrintToolbar({ shareApi }: { shareApi?: string }) {
   const [err, setErr] = useState('')
-  const [sent, setSent] = useState<{ text: string; copied: boolean } | null>(null)
+  const [sent, setSent] = useState(false)
 
-  const copy = async (text: string) => {
-    try { await navigator.clipboard.writeText(text); return true } catch { return false }
-  }
-
-  const sendLine = async () => {
-    setBusy(true); setErr(''); setSent(null)
-    try {
-      const r = await fetch(`/api/quotes/${quoteId}/share`, { method: 'POST' })
-      const d = await r.json()
-      if (!r.ok) { setErr(d.error || 'เตรียมส่งไม่สำเร็จ'); return }
-      const copied = await copy(d.text)
-      setSent({ text: d.text, copied })
-      // เปิดหน้าต่างบันทึก PDF ต่อทันที — ชื่อไฟล์ตั้งเป็นเลขที่ใบให้แล้วจาก <title> ของหน้านี้
-      setTimeout(() => window.print(), 250)
-    } catch {
-      setErr('เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง')
-    } finally {
-      setBusy(false)
-    }
+  const sendLine = () => {
+    setErr('')
+    setSent(true)
+    fetch(shareApi!, { method: 'POST' })
+      .then(async (r) => { if (!r.ok) setErr((await r.json().catch(() => ({}))).error || 'มาร์กว่าส่งแล้วไม่สำเร็จ') })
+      .catch(() => setErr('มาร์กว่าส่งแล้วไม่สำเร็จ — ตัวไฟล์ PDF ยังใช้ได้ตามปกติ'))
+    window.print()
   }
 
   return (
@@ -44,18 +34,15 @@ export default function PrintToolbar({ quoteId }: { quoteId?: number }) {
           <ol className="psteps">
             <li>ในหน้าต่างที่เปิดขึ้น เลือกปลายทางเป็น <b>บันทึกเป็น PDF</b> แล้วกดบันทึก</li>
             <li>เปิดแชทลูกค้าในแอป LINE แล้ว<b>แนบไฟล์ PDF</b> ที่เพิ่งบันทึก</li>
-            <li>{sent.copied ? 'วางข้อความที่ก๊อบไว้ให้ (Ctrl+V) แล้วส่ง' : 'ก๊อบข้อความข้างล่างไปวางแล้วส่ง'}</li>
           </ol>
-          <textarea readOnly value={sent.text} onFocus={(e) => e.currentTarget.select()} />
           <div className="row">
-            <button onClick={async () => setSent({ ...sent, copied: await copy(sent.text) })}>คัดลอกข้อความ</button>
-            <button onClick={() => window.print()}>เปิดหน้าบันทึก PDF อีกครั้ง</button>
-            <button onClick={() => setSent(null)}>ปิดกล่องนี้</button>
+            <button onClick={() => window.print()}>บันทึกเป็น PDF อีกครั้ง</button>
+            <button onClick={() => setSent(false)}>ปิดกล่องนี้</button>
           </div>
         </div>
       )}
       <button onClick={() => window.close()}>ปิด</button>
-      {quoteId != null && <button className="line" disabled={busy} onClick={sendLine}>{busy ? 'กำลังเตรียม…' : '💬 ส่งไลน์'}</button>}
+      {shareApi && <button className="line" onClick={sendLine}>💬 ส่งไลน์</button>}
       <button onClick={() => window.print()}>🖨 พิมพ์ / บันทึก PDF</button>
     </div>
   )

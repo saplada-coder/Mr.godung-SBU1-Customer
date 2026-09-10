@@ -29,5 +29,5 @@ export default async function QuotePrintPage({ params }: { params: Promise<{ id:
   const id = Number((await params).id)
   const [q] = await getDb().select().from(quotations).where(eq(quotations.id, id)).limit(1)
   if (!q) notFound()
-  return <QuoteDoc data={await loadQuoteDoc(q)} toolbar={<PrintToolbar quoteId={q.id} />} />
+  return <QuoteDoc data={await loadQuoteDoc(q)} toolbar={<PrintToolbar shareApi={`/api/quotes/${q.id}/share`} />} />
 }

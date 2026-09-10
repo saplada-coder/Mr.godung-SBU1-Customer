@@ -8,18 +8,10 @@ import { canEdit } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
-/** คำนำหน้าที่มีอยู่แล้ว/ชื่อนิติบุคคล — เติม "คุณ" ทับจะอ่านแปลก เช่น "คุณบริษัท พีดี อควา" */
-const TITLED = /^(คุณ|นาย|นาง|นางสาว|น\.ส\.|ดร\.|บริษัท|บจก|บมจ|หจก|ห\.จ\.ก|ร้าน|Mr|Mrs|Ms|Dr)/i
-/** เรียกลูกค้าว่า "คุณ..." ในข้อความที่ส่งไลน์เสมอ */
-const khun = (name: string) => {
-  const s = name.trim()
-  return !s || TITLED.test(s) ? s : `คุณ${s}`
-}
-
 /**
- * เตรียมส่งใบเสนอราคาให้ลูกค้าทางไลน์ (ปุ่ม "ส่งไลน์" บนหน้าพิมพ์)
+ * มาร์กว่าส่งใบเสนอราคาให้ลูกค้าทางไลน์แล้ว (ปุ่ม "ส่งไลน์" บนหน้าพิมพ์)
  * ตัวใบไปเป็นไฟล์ PDF ที่พนักงานบันทึกจากหน้าพิมพ์แล้วแนบในแชทเอง — ไลน์ส่วนตัวไม่มี API ให้ส่งไฟล์แทนได้
- * ที่นี่จึงทำสองอย่าง: เลื่อนสถานะใบร่างเป็น "ส่งลูกค้าแล้ว" และคืนข้อความสำเร็จรูปให้ไปวางในแชท
+ * ใบร่างที่ส่งครั้งแรกจะเลื่อนสถานะเป็น "ส่งลูกค้าแล้ว" เหมือนกดปุ่มส่งลูกค้า
  */
 export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const me = await getSessionUser()
@@ -32,7 +24,6 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   if (q.deletedAt) return NextResponse.json({ error: 'ใบนี้อยู่ในถังขยะ กู้คืนก่อนถึงจะส่งได้' }, { status: 400 })
   if (q.status === 'ยกเลิก') return NextResponse.json({ error: 'ใบนี้ยกเลิกแล้ว ส่งให้ลูกค้าไม่ได้' }, { status: 400 })
 
-  // ใบร่างที่เพิ่งส่งออกครั้งแรก → เลื่อนสถานะเหมือนกดปุ่ม "ส่งลูกค้า"
   if (q.status === 'ร่าง') {
     await db.update(quotations).set({ status: 'ส่งลูกค้าแล้ว', sentAt: today(), updatedAt: new Date() }).where(eq(quotations.id, id))
     await db.update(customers).set({ quoteStatus: 'ส่งใบเสนอราคาแล้ว', updatedAt: new Date() }).where(eq(customers.id, q.customerId))
@@ -45,14 +36,5 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     customerId: q.customerId, quotationId: id, userId: me.id,
     action: 'quote-share', field: 'ส่งไลน์', newValue: `ส่งใบ ${q.code} ให้ลูกค้าทางไลน์`,
   })
-
-  const [cust] = await db.select().from(customers).where(eq(customers.id, q.customerId)).limit(1)
-  const text = [
-    `ใบเสนอราคา ${q.code}${q.rev > 1 ? ` (Rev.${q.rev})` : ''}`,
-    `ลูกค้า: ${khun(q.custName || cust?.name || cust?.chname || '-')}`,
-    '',
-    'รายละเอียดตามไฟล์ PDF ที่แนบมาค่ะ',
-  ].join('\n')
-
-  return NextResponse.json({ ok: true, text, code: q.code })
+  return NextResponse.json({ ok: true, code: q.code })
 }
