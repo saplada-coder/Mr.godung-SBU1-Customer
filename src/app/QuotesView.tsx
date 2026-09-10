@@ -578,7 +578,7 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, onOpenCu
         </div>
 
         <div className="modal-f" style={{ flexWrap: 'wrap' }}>
-          <button className="btn" onClick={() => window.open(`/quotes/${id}/print`, '_blank')}>🖨 พิมพ์ / PDF</button>
+          <button className="btn" onClick={() => window.open(`/quotes/${id}/print`, '_blank')}>📄 ส่งลูกค้า / พิมพ์</button>
           <span style={{ flex: 1 }} />
           {(mine || admin) && quote.projectId == null && <button className="btn" style={{ color: '#b0281c' }} onClick={del}>🗑 ลบ</button>}
           {canUnlock && !unlocked && <button className="btn" onClick={() => setUnlocked(true)}>✏️ แก้ไขใบนี้</button>}
