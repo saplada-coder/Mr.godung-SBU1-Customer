@@ -32,8 +32,14 @@ type View = 'overview' | 'alerts' | 'intake' | 'regions' | 'customers' | 'keyfin
 const TITLES: Record<View, string> = { overview: 'ภาพรวม', alerts: 'แจ้งเตือน', intake: 'ลูกค้าเข้าใหม่', regions: 'ภูมิภาค (BU)', customers: 'รายการลูกค้า', keyfindings: 'Key Finding', quotes: 'ใบเสนอราคา', projects: 'งานก่อสร้าง', finance: 'เอกสารการเงิน', office: 'ค่าใช้จ่ายสำนักงาน', approvals: 'รออนุมัติ', users: 'จัดการผู้ใช้' }
 // v2: cache เก็บเฉพาะชุด 3 เดือนล่าสุด (ชุดเต็มใหญ่เกินกว่าจะ cache)
 const CACHE_KEY = 'sbu1-dash-cache-v2'
-const REF = () => toMs('2026-07-15') // อ้างอิงข้อมูลล่าสุด
-const NOW = () => Date.UTC(2026, 6, 17)
+/**
+ * "วันนี้" ของทั้งแดชบอร์ด — ใช้วันที่จริง
+ * เดิมตรึงไว้ที่ 15/17 ก.ค. 2026 ตั้งแต่สมัยข้อมูลเป็นชุดนำเข้าคงที่ พอระบบใช้จริงกราฟเลยหยุดที่ ก.ค.
+ * และหน้าแจ้งเตือนนับ "เลยนัด" จากวันเก่า · ตัดเป็น UTC เที่ยงคืนให้ตรงกับ toMs() ของวันที่ในข้อมูล
+ */
+const TODAY = () => new Date().toISOString().slice(0, 10)
+const REF = () => toMs(TODAY())
+const NOW = () => toMs(TODAY())
 
 const Svg = ({ html }: { html: string }) => <div dangerouslySetInnerHTML={{ __html: html }} />
 
@@ -470,29 +476,30 @@ function Intake({ records }: { records: Rec[] }) {
   const base = records.filter((r) => r.d && (!ranged || inRange(r.d, from, to)))
   const rs = bu ? base.filter((r) => r.bu === bu) : base
   const ref = REF()
+  const today = TODAY(), curMonth = today.slice(0, 7), curYear = today.slice(0, 4)
 
   const buckets = () => {
     const out: { key: string; label: string; full: string; match: (r: Rec) => boolean }[] = []
     if (mode === 'day') for (let i = 29; i >= 0; i--) { const k = toStr(ref - i * DAY); out.push({ key: k, label: String(+k.slice(8, 10)), full: thDate(k), match: (r) => r.d === k }) }
     else if (mode === 'week') { const w0 = weekStart(ref); for (let i = 15; i >= 0; i--) { const ms = w0 - i * 7 * DAY, k = toStr(ms); out.push({ key: k, label: (+k.slice(8, 10)) + ' ' + TH_MONTHS[+k.slice(5, 7)], full: 'สัปดาห์ ' + thDate(k), match: (r) => !!r.d && toMs(r.d) >= ms && toMs(r.d) < ms + 7 * DAY }) } }
-    else if (mode === 'month') years.forEach((y) => { for (let m = 1; m <= 12; m++) { const k = y + '-' + String(m).padStart(2, '0'); if (k > '2026-07') return; out.push({ key: k, label: TH_MONTHS[m] + (m === 1 ? ' ' + y : ''), full: TH_MONTHS[m] + ' ' + y, match: (r) => r.d?.slice(0, 7) === k }) } })
+    else if (mode === 'month') years.forEach((y) => { for (let m = 1; m <= 12; m++) { const k = y + '-' + String(m).padStart(2, '0'); if (k > curMonth) return; out.push({ key: k, label: TH_MONTHS[m] + (m === 1 ? ' ' + y : ''), full: TH_MONTHS[m] + ' ' + y, match: (r) => r.d?.slice(0, 7) === k }) } })
     else years.forEach((y) => out.push({ key: y, label: y, full: 'ปี ' + y, match: (r) => r.d?.slice(0, 4) === y }))
     return out
   }
   const bks = buckets().map((b) => { const m = rs.filter(b.match); return { ...b, n: m.length, v: m.reduce((a, r) => a + (r.amountEst || r.amountActual || 0), 0) } })
   const wk = weekStart(ref)
   const stats = [
-    ['วันล่าสุด', rs.filter((r) => r.d === '2026-07-15'), '15 ก.ค. 2026'],
-    ['สัปดาห์ล่าสุด', rs.filter((r) => r.d && toMs(r.d) >= wk && toMs(r.d) < wk + 7 * DAY), 'สัปดาห์ปัจจุบัน'],
-    ['เดือนล่าสุด', rs.filter((r) => r.d?.slice(0, 7) === '2026-07'), 'เดือนปัจจุบัน'],
-    ['ปีนี้ (2026)', rs.filter((r) => r.d?.slice(0, 4) === '2026'), 'สะสมทั้งปี'],
+    ['วันนี้', rs.filter((r) => r.d === today), thDate(today)],
+    ['สัปดาห์นี้', rs.filter((r) => r.d && toMs(r.d) >= wk && toMs(r.d) < wk + 7 * DAY), 'สัปดาห์ปัจจุบัน'],
+    ['เดือนนี้', rs.filter((r) => r.d?.slice(0, 7) === curMonth), TH_MONTHS[+curMonth.slice(5, 7)] + ' ' + curYear],
+    [`ปีนี้ (${curYear})`, rs.filter((r) => r.d?.slice(0, 4) === curYear), 'สะสมทั้งปี'],
   ] as const
   const buRows = BUS.map((b) => { const m = base.filter((r) => r.bu === b && buckets().some((x) => x.match(r))); return { bu: b, n: m.length, v: m.reduce((a, r) => a + (r.amountEst || r.amountActual || 0), 0) } }).sort((a, b) => b.n - a.n)
   const mx = Math.max(1, ...buRows.map((r) => r.n))
 
   return (
     <>
-      <div className="view-head"><div><h1>ลูกค้าเข้าใหม่ตามช่วงเวลา</h1><p>นับจำนวนใบเสนอราคาที่เปิดใหม่ · {ranged ? 'ช่วง ' + rangeLabel(from, to) : 'อ้างอิงข้อมูลล่าสุด 15 ก.ค. 2026'}</p></div>
+      <div className="view-head"><div><h1>ลูกค้าเข้าใหม่ตามช่วงเวลา</h1><p>นับจำนวนใบเสนอราคาที่เปิดใหม่ · {ranged ? 'ช่วง ' + rangeLabel(from, to) : 'นับถึงวันนี้ ' + thDate(today)}</p></div>
         <RangePicker from={from} to={to} onFrom={setFrom} onTo={setTo} onClear={() => { setFrom(''); setTo('') }} />
       </div>
       <div className="statgrid4">
