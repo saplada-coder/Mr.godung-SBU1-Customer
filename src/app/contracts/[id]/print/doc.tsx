@@ -5,6 +5,7 @@ import { getSettingsFor } from '@/lib/settings'
 import { n0, num } from '@/lib/biz'
 import { bahtText, thDateBE, thDateContract } from '@/lib/format'
 import { halfSubs } from '@/lib/constants'
+import { defaultProjectName, defaultSite, siteComplete, addDays } from '@/lib/contract-defaults'
 import FitPages from '../../../fit-pages'
 
 /**
@@ -60,8 +61,19 @@ export async function loadContract(id: number) {
     if (subsJson !== i.subsJson) await db.update(contractInstallments).set({ subsJson }).where(eq(contractInstallments.id, i.id))
     return { ...i, subsJson }
   }))
+  // ช่องที่ยังว่างหรือยังไม่ครบในสัญญาเก่า (ร่างก่อนระบบเดาค่าให้) เติมจากใบเสนอราคา/ลูกค้าให้เองตอนเปิด แล้วบันทึกเลย
+  // สิ่งที่คนพิมพ์เองไว้แล้วไม่ถูกทับ: ชื่อโครงการที่มีอยู่ ที่ตั้งที่มีตำบล/อำเภอ วันแล้วเสร็จที่กรอกแล้ว
+  const fill: Partial<typeof c> = {}
+  if (!c.projectName) { const v = defaultProjectName(cust ?? null, q?.custName); if (v) fill.projectName = v }
+  if (!siteComplete(c.siteAddress)) { const v = defaultSite(cust ?? null, q?.custAddress); if (v && v !== c.siteAddress) fill.siteAddress = v }
+  if (!c.dueDate && c.signDate && c.buildDays) fill.dueDate = addDays(c.signDate, c.buildDays)
+  let contract = c
+  if (Object.keys(fill).length) {
+    await db.update(contracts).set(fill).where(eq(contracts.id, id))
+    contract = { ...c, ...fill }
+  }
   const settings = await getSettingsFor(cust?.bu)
-  return { c, insts, q: q ?? null, cust: cust ?? null, settings }
+  return { c: contract, insts, q: q ?? null, cust: cust ?? null, settings }
 }
 
 export type ContractDocData = NonNullable<Awaited<ReturnType<typeof loadContract>>>
@@ -462,13 +474,14 @@ export const CONTRACT_CSS = `
 .ctr .page{background:#fff;width:210mm;min-height:290mm;margin:0 auto 18px;padding:16mm 18mm;box-shadow:0 2px 14px rgba(0,0,0,.35);font-size:13px;line-height:1.75;position:relative}
 .ctr .orig{position:absolute;top:8mm;right:18mm;font-weight:700;font-size:12px}
 .ctr .b{font-weight:700}.ctr .r{text-align:right}.ctr .red{color:#c00}.ctr .pre{white-space:pre-wrap}
-.ctr .cover{text-align:center;padding-top:24mm}
-.ctr .cover .logo{width:150px;height:150px;object-fit:contain;border-radius:14px;background:#000;margin:0 auto 18px;display:block}
-.ctr .cover h1{font-size:27px;font-weight:800;margin:0 0 14px}
-.ctr .cover h2{font-size:19px;font-weight:700;margin:0 0 18px}
-.ctr .cv-line{font-size:14px;margin-bottom:6px}
-.ctr .cv-project{margin-top:34mm;display:flex;flex-direction:column;gap:12px}
-.ctr .cv-project .big{font-size:19px}
+/* หน้าปก: สัดส่วนตามฟอร์มจริง — โลโก้บน ชื่อสัญญาใหญ่ ที่อยู่บริษัทตัวหนา แล้วเว้นลงมาวางชื่อโครงการ/ผู้ว่าจ้าง/ที่ตั้ง ที่ราวสามส่วนสี่ของหน้า */
+.ctr .cover{text-align:center;padding-top:22mm}
+.ctr .cover .logo{width:160px;height:160px;object-fit:contain;border-radius:14px;background:#000;margin:0 auto 22px;display:block}
+.ctr .cover h1{font-size:33px;font-weight:800;margin:0 0 16px;letter-spacing:.01em}
+.ctr .cover h2{font-size:23px;font-weight:700;margin:0 0 22px}
+.ctr .cv-line{font-size:15.5px;font-weight:700;margin-bottom:9px}
+.ctr .cv-project{margin-top:42mm;display:flex;flex-direction:column;gap:16px}
+.ctr .cv-project .big{font-size:23px}
 .ctr .doc-h{text-align:center;font-size:19px;font-weight:800;margin:0 0 16px}
 .ctr .cl-h{font-weight:700;font-size:14px;margin:16px 0 6px}
 .ctr p.ind{margin:0 0 10px;text-indent:2em;text-align:justify}

@@ -26,7 +26,7 @@ export function serializeCustomer(
   const appt = opts.appt
   return {
     id: c.id, code: c.code, bu: c.bu,
-    name: c.name, channel: c.channel, chname: c.chname, phone: c.phone, province: c.province,
+    name: c.name, channel: c.channel, chname: c.chname, phone: c.phone, province: c.province, siteAddress: c.siteAddress,
     detail: c.detail, cat: c.cat,
     k: n(c.widthM), y: n(c.lengthM), s: n(c.heightM), sqm,
     amountEst: est, amountActual: actual, shownVal, isFinal: isFinal(c.status),

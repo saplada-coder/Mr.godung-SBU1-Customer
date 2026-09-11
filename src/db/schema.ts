@@ -127,6 +127,8 @@ export const customers = pgTable(
     chname: varchar('chname', { length: 120 }),
     phone: varchar('phone', { length: 20 }),
     province: varchar('province', { length: 60 }),
+    /** ที่ตั้งหน้างานก่อสร้าง "ตำบล… อำเภอ… จังหวัด…" — ขึ้นหน้าปกสัญญาและข้อ 1 · จังหวัดอย่างเดียวไม่พอ */
+    siteAddress: text('site_address'),
     detail: text('detail'),
     cat: varchar('cat', { length: 60 }),
     widthM: numeric('width_m', { precision: 8, scale: 2 }),

@@ -20,6 +20,7 @@ type Appt = { type: string; date: string; time: string; note: string } | null
 export type Rec = {
   id: number; code: string; bu: string
   name: string | null; channel: string | null; chname: string | null; phone: string | null; province: string | null
+  siteAddress?: string | null
   detail: string | null; cat: string | null
   k: number | null; y: number | null; s: number | null; sqm: number | null
   amountEst: number | null; amountActual: number | null; shownVal: number | null; isFinal: boolean
@@ -980,6 +981,7 @@ function ManageModal({ rec, me, rateOf, onClose, onSaved, showToast, onCreateQuo
   const [channel, setChannel] = useState(rec.channel || 'FB : Mr.โกดัง')
   const [chname, setChname] = useState(rec.chname || '')
   const [province, setProvince] = useState(rec.province || '')
+  const [siteAddress, setSiteAddress] = useState(rec.siteAddress || '')
   const [cat, setCat] = useState(rec.cat || '')
   const [detail, setDetail] = useState(rec.detail || '')
   const [d, setD] = useState(rec.d || '')
@@ -1011,7 +1013,7 @@ function ManageModal({ rec, me, rateOf, onClose, onSaved, showToast, onCreateQuo
     if (!name.trim() && !chname.trim()) { showToast('ต้องมีชื่อลูกค้า หรือชื่อช่องทางอย่างน้อย 1 อย่าง'); return }
     setBusy(true)
     const body: Record<string, unknown> = {
-      status, quote, name, phone, channel, chname, province, cat, detail, d: d || null,
+      status, quote, name, phone, channel, chname, province, siteAddress, cat, detail, d: d || null,
       k: k || null, y: y || null, s: sHt || null, sqm: sqm || null, closedAt: closedAt || null,
       amount: amount === '' ? null : Number(amount),
       appt: apptDate ? { type: apptType || 'site', date: apptDate, time: apptTime, note: apptNote } : null,
@@ -1033,6 +1035,11 @@ function ManageModal({ rec, me, rateOf, onClose, onSaved, showToast, onCreateQuo
           <div className="field"><label>ชื่อช่องทางการติดต่อ</label><input value={chname} onChange={(e) => setChname(e.target.value)} placeholder="ชื่อที่แสดงใน FB / LINE" /></div>
           <div className="field"><label>จังหวัด</label><select value={province} onChange={(e) => setProvince(e.target.value)}><option value="">— เลือกจังหวัด —</option>{PROVINCES.map((p) => <option key={p}>{p}</option>)}</select></div>
           <div className="field"><label>ประเภทธุรกิจ</label><select value={cat} onChange={(e) => setCat(e.target.value)}><option value="">— ไม่ระบุ —</option>{CATS.map((c) => <option key={c}>{c}</option>)}</select></div>
+          <div className="field full">
+            <label>ที่ตั้งโครงการ — ตำบล / อำเภอ / จังหวัด</label>
+            <input value={siteAddress} onChange={(e) => setSiteAddress(e.target.value)} placeholder={`เช่น ตำบลเทพกระษัตรี อำเภอถลาง จังหวัด${province || 'ภูเก็ต'}`} />
+            <div className="hintline">พิมพ์ที่หน้าปกสัญญาบรรทัดล่างสุดและในข้อ 1 ขอบเขตของงาน — สัญญาของลูกค้ารายนี้จะดึงไปใช้เอง</div>
+          </div>
           <div className="field"><label>วันที่รับข้อมูล</label><input type="date" value={d} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setD(e.target.value)} onClick={(e) => (e.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.()} /></div>
           <div className="field full"><label>รายละเอียด / ข้อมูลเพิ่มเติม</label><input value={detail} onChange={(e) => setDetail(e.target.value)} placeholder="เช่น โกดังเก็บสินค้า / ข้อมูลที่ลูกค้าให้เพิ่ม" /></div>
           <div className="field full"><label>ขนาด — กว้าง × ยาว × สูง (เมตร)</label>
@@ -1082,7 +1089,7 @@ function ManageModal({ rec, me, rateOf, onClose, onSaved, showToast, onCreateQuo
 
 function AddModal({ records, rateOf, onClose, onSaved, showToast }: { records: Rec[]; rateOf: (bu: string) => number; onClose: () => void; onSaved: () => void; showToast: (m: string) => void }) {
   const today = new Date().toISOString().slice(0, 10)
-  const [f, setF] = useState({ name: '', phone: '', channel: 'FB : Mr.โกดัง', chname: '', bu: 'BU1', province: '', cat: CATS[0] as string, detail: '', k: '', y: '', s: '', sqm: '', amount: '', d: today, status: ST_NEW as string, quote: 'ยังไม่ทำใบเสนอราคา', apptType: 'zoom', apptDate: '', apptTime: '' })
+  const [f, setF] = useState({ name: '', phone: '', channel: 'FB : Mr.โกดัง', chname: '', bu: 'BU1', province: '', siteAddress: '', cat: CATS[0] as string, detail: '', k: '', y: '', s: '', sqm: '', amount: '', d: today, status: ST_NEW as string, quote: 'ยังไม่ทำใบเสนอราคา', apptType: 'zoom', apptDate: '', apptTime: '' })
   const [busy, setBusy] = useState(false)
   const set = (k: keyof typeof f, v: string) => setF((o) => ({ ...o, [k]: v }))
   const dimsSqm = (+f.k > 0 && +f.y > 0) ? +f.k * +f.y : 0
@@ -1120,6 +1127,11 @@ function AddModal({ records, rateOf, onClose, onSaved, showToast }: { records: R
           <div className="field"><label>รายละเอียดการใช้งาน</label><input value={f.detail} onChange={(e) => set('detail', e.target.value)} placeholder="เช่น โกดังเก็บสินค้า" /></div>
           <div className="field"><label>ภูมิภาค (BU)</label><select value={f.bu} onChange={(e) => set('bu', e.target.value)}>{BUS.map((b) => <option key={b} value={b}>{BU_NAMES[b]}</option>)}</select></div>
           <div className="field"><label>จังหวัด</label><select value={f.province} onChange={(e) => set('province', e.target.value)}><option value="">— เลือกจังหวัด —</option>{PROVINCES.map((p) => <option key={p}>{p}</option>)}</select></div>
+          <div className="field full">
+            <label>ที่ตั้งโครงการ — ตำบล / อำเภอ / จังหวัด</label>
+            <input value={f.siteAddress} onChange={(e) => set('siteAddress', e.target.value)} placeholder={`เช่น ตำบลเทพกระษัตรี อำเภอถลาง จังหวัด${f.province || 'ภูเก็ต'}`} />
+            <div className="hintline">ใส่ไว้ตั้งแต่ตอนนี้ สัญญาจะได้ที่ตั้งครบโดยไม่ต้องกรอกซ้ำ · ยังไม่รู้ก็ข้ามได้ มาเติมทีหลัง</div>
+          </div>
           <div className="field full"><label>ขนาด — กว้าง × ยาว × สูง (เมตร)</label>
             <div className="dims"><input type="number" value={f.k} onChange={(e) => set('k', e.target.value)} placeholder="กว้าง" /><input type="number" value={f.y} onChange={(e) => set('y', e.target.value)} placeholder="ยาว" /><input type="number" value={f.s} onChange={(e) => set('s', e.target.value)} placeholder="สูง" /></div>
             <div className="hintline">มี กว้าง×ยาว จะคำนวณ ตร.ม. ให้อัตโนมัติ (สูงไม่นับเป็นพื้นที่)</div>

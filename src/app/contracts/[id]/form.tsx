@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { CONTRACT_STATUSES, contractMeta, halfSubs, isAdminUp, type Role } from '@/lib/constants'
 import { bahtText } from '@/lib/format'
+import { siteComplete } from '@/lib/contract-defaults'
 import { uiConfirm } from '../../biz-shared'
 
 export type SubRow = { title: string; amount: number }
@@ -38,7 +39,7 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
   const pctTotal = Math.round(f.installments.reduce((a, i) => a + (i.percent || 0), 0) * 100) / 100
   const diff = Math.round(instTotal - f.contractAmount)
   /** ที่ตั้งโครงการต้องมีทั้งตำบลและอำเภอ ไม่ใช่แค่จังหวัดที่ระบบเติมให้ตอนสร้าง */
-  const siteIncomplete = !/ตำบล|ต\./.test(f.siteAddress) || !/อำเภอ|อ\.|เขต/.test(f.siteAddress)
+  const siteIncomplete = !siteComplete(f.siteAddress)
 
   const save = async (extra?: Partial<ContractInit>) => {
     setBusy(true); setMsg(null)

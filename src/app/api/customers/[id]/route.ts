@@ -80,6 +80,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if ('name' in b) { const v = (b.name ?? '').trim() || null; chg('ชื่อลูกค้า', cur.name, v); patch.name = v }
   if ('channel' in b) { const v = CHANNELS.includes(b.channel) ? b.channel : null; chg('ช่องทาง', cur.channel, v); patch.channel = v }
   if ('province' in b) { const v = (b.province ?? '').trim() || null; chg('จังหวัด', cur.province, v); patch.province = v }
+  if ('siteAddress' in b) { const v = String(b.siteAddress ?? '').trim().slice(0, 500) || null; chg('ที่ตั้งโครงการ', cur.siteAddress, v); patch.siteAddress = v }
   if ('detail' in b) { const v = (b.detail ?? '').trim() || null; chg('รายละเอียด', cur.detail, v); patch.detail = v }
   if ('cat' in b) { const v = b.cat || null; chg('ประเภทธุรกิจ', cur.cat, v); patch.cat = v }
   if ('d' in b) { const v = /^\d{4}-\d{2}-\d{2}$/.test(String(b.d)) ? b.d : null; chg('วันที่รับข้อมูล', cur.inquiredAt, v); patch.inquiredAt = v }

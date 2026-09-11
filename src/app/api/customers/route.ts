@@ -104,6 +104,7 @@ export async function POST(req: Request) {
       channel: CHANNELS.includes(b.channel) ? b.channel : null,
       phone: normPhone(b.phone),
       province: (b.province ?? '').trim() || null,
+      siteAddress: String(b.siteAddress ?? '').trim().slice(0, 500) || null,
       detail: (b.detail ?? '').trim() || null,
       cat: b.cat || null,
       widthM: str(k), lengthM: str(y), heightM: str(s), sqm: str(sqm),
