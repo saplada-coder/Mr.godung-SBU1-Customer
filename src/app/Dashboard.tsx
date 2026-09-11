@@ -935,14 +935,26 @@ function groupedBarsSvg(cats: string[], series: { name: string; color: string; v
   })
   return s + '</svg>'
 }
-function barChartSvg(bks: { label: string; n: number }[]) {
+function barChartSvg(bks: { label: string; full?: string; n: number }[]) {
   const W = 760, H = 250, padL = 30, padR = 10, padT = 16, padB = 40
   const n = bks.length, maxv = Math.max(1, ...bks.map((b) => b.n))
   const iw = W - padL - padR, ih = H - padT - padB, step = iw / n, bw = Math.min(42, step * 0.66), y = (v: number) => padT + ih - (v / maxv) * ih
   let grid = ''
   for (let g = 0; g <= 4; g++) { const gv = Math.round(maxv * g / 4), yy = padT + ih - (g / 4) * ih; grid += `<line class="gridline" x1="${padL}" y1="${yy}" x2="${W - padR}" y2="${yy}"/><text class="axis-v" x="${padL - 6}" y="${yy + 3}" text-anchor="end">${gv}</text>` }
-  let bars = '', xl = ''; const every = n > 16 ? Math.ceil(n / 12) : 1, showN = n <= 16
-  bks.forEach((b, i) => { const cx = padL + i * step + step / 2, by = y(b.n), bh = padT + ih - by; bars += `<rect x="${(cx - bw / 2).toFixed(1)}" y="${by.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0, bh).toFixed(1)}" rx="3" fill="var(--accent)" opacity="${b.n ? 1 : 0.22}"/>`; if (b.n && showN) bars += `<text class="bar-val" x="${cx.toFixed(1)}" y="${(by - 4).toFixed(1)}" text-anchor="middle">${b.n}</text>`; if (i % every === 0) xl += `<text class="axis" x="${cx.toFixed(1)}" y="${H - 16}" text-anchor="middle">${b.label}</text>` })
+  let bars = '', xl = ''
+  // แกนล่างเขียนป้ายได้ไม่ครบเมื่อช่วงยาว (รายเดือน 30+ แท่ง) จึงเว้นทุก every แท่ง
+  // แต่แท่งสุดท้าย = ช่วงปัจจุบัน ต้องมีป้ายเสมอ ไม่งั้นคนอ่านคิดว่ากราฟจบที่ป้ายก่อนหน้า — ป้ายที่จะชนกับมันถูกข้าม
+  const every = n > 16 ? Math.ceil(n / 12) : 1, last = n - 1
+  const labelAt = (i: number) => i === last || (i % every === 0 && last - i >= 2)
+  // ตัวเลขบนแท่ง: ช่วงสั้นเขียนขนาดปกติ ช่วงยาวเขียนเล็กลงถ้ายังพอมีที่ (ไม่งั้นแท่งติดกันจะทับกันจนอ่านไม่ออก)
+  const valFont = n <= 16 ? '' : step >= 20 ? ' font-size="9"' : null
+  bks.forEach((b, i) => {
+    const cx = padL + i * step + step / 2, by = y(b.n), bh = padT + ih - by
+    const tip = b.full ? `<title>${b.full} · ${b.n} ราย</title>` : ''
+    bars += `<rect x="${(cx - bw / 2).toFixed(1)}" y="${by.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0, bh).toFixed(1)}" rx="3" fill="var(--accent)" opacity="${b.n ? 1 : 0.22}">${tip}</rect>`
+    if (b.n && valFont !== null) bars += `<text class="bar-val"${valFont} x="${cx.toFixed(1)}" y="${(by - 4).toFixed(1)}" text-anchor="middle">${b.n}</text>`
+    if (labelAt(i)) xl += `<text class="axis"${i === last ? ' font-weight="700"' : ''} x="${cx.toFixed(1)}" y="${H - 16}" text-anchor="middle">${b.label}</text>`
+  })
   return `<svg class="chart" viewBox="0 0 ${W} ${H}">${grid}${bars}${xl}</svg>`
 }
 
