@@ -249,7 +249,8 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
               const subs = subsOf(i.subsJson)
               const amt = n0(i.amount)
               return [
-                <tr key={i.id} className="main">
+                // ห้ามใช้ class "main" — ชนกับ .main ของโครงหน้าแอปที่สั่ง flex-direction:column แล้วช่องในแถวจะซ้อนกัน
+                <tr key={i.id} className="inst-main">
                   <td className="no">6.1.{n + 1}</td>
                   <td className="b">{i.title}</td>
                   <td className="amt">
@@ -481,7 +482,7 @@ export const CONTRACT_CSS = `
 .ctr table.inst td{vertical-align:top;padding:3px 6px}
 .ctr table.inst td.no{width:52px;white-space:nowrap}
 .ctr table.inst td.amt{width:250px;text-align:right;white-space:nowrap}
-.ctr table.inst tr.main td{padding-top:8px}
+.ctr table.inst tr.inst-main td{padding-top:8px}
 .ctr table.inst .mark{background:#f6e83a;padding:0 4px;font-weight:700}
 .ctr table.inst .pct{color:#555;font-size:11.5px}
 /* งวดย่อย: เยื้องเข้าใต้ชื่องวดหลัก ตัวแดงทั้งแถวเหมือนฟอร์ม ยอดอยู่คอลัมน์ขวาเดียวกับงวดหลัก */
