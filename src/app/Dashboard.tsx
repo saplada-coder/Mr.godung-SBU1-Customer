@@ -944,9 +944,11 @@ function barChartSvg(bks: { label: string; full?: string; n: number }[]) {
   for (let g = 0; g <= 4; g++) { const gv = Math.round(maxv * g / 4), yy = padT + ih - (g / 4) * ih; grid += `<line class="gridline" x1="${padL}" y1="${yy}" x2="${W - padR}" y2="${yy}"/><text class="axis-v" x="${padL - 6}" y="${yy + 3}" text-anchor="end">${gv}</text>` }
   let bars = '', xl = ''
   // แกนล่างเขียนป้ายได้ไม่ครบเมื่อช่วงยาว (รายเดือน 30+ แท่ง) จึงเว้นทุก every แท่ง
-  // แต่แท่งสุดท้าย = ช่วงปัจจุบัน ต้องมีป้ายเสมอ ไม่งั้นคนอ่านคิดว่ากราฟจบที่ป้ายก่อนหน้า — ป้ายที่จะชนกับมันถูกข้าม
+  // แต่ 3 ช่วงล่าสุดต้องมีป้ายครบเสมอ — เดือนที่เพิ่งผ่านคือสิ่งที่คนดูอยู่ ป้ายหายไปแล้วจะคิดว่าไม่มีข้อมูล
+  // ป้ายตามรอบที่จะชนกับกลุ่มท้ายถูกข้าม และช่วงยาวใช้ตัวอักษรแกนเล็กลงให้ป้ายติดกันได้
   const every = n > 16 ? Math.ceil(n / 12) : 1, last = n - 1
-  const labelAt = (i: number) => i === last || (i % every === 0 && last - i >= 2)
+  const labelAt = (i: number) => last - i <= 2 || (i % every === 0 && last - i >= 4)
+  const axisFont = n > 16 ? ' font-size="10"' : ''
   // ตัวเลขบนแท่ง: ช่วงสั้นเขียนขนาดปกติ ช่วงยาวเขียนเล็กลงถ้ายังพอมีที่ (ไม่งั้นแท่งติดกันจะทับกันจนอ่านไม่ออก)
   const valFont = n <= 16 ? '' : step >= 20 ? ' font-size="9"' : null
   bks.forEach((b, i) => {
@@ -954,7 +956,7 @@ function barChartSvg(bks: { label: string; full?: string; n: number }[]) {
     const tip = b.full ? `<title>${b.full} · ${b.n} ราย</title>` : ''
     bars += `<rect x="${(cx - bw / 2).toFixed(1)}" y="${by.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0, bh).toFixed(1)}" rx="3" fill="var(--accent)" opacity="${b.n ? 1 : 0.22}">${tip}</rect>`
     if (b.n && valFont !== null) bars += `<text class="bar-val"${valFont} x="${cx.toFixed(1)}" y="${(by - 4).toFixed(1)}" text-anchor="middle">${b.n}</text>`
-    if (labelAt(i)) xl += `<text class="axis"${i === last ? ' font-weight="700"' : ''} x="${cx.toFixed(1)}" y="${H - 16}" text-anchor="middle">${b.label}</text>`
+    if (labelAt(i)) xl += `<text class="axis"${axisFont}${i === last ? ' font-weight="700"' : ''} x="${cx.toFixed(1)}" y="${H - 16}" text-anchor="middle">${b.label}</text>`
   })
   return `<svg class="chart" viewBox="0 0 ${W} ${H}">${grid}${bars}${xl}</svg>`
 }
