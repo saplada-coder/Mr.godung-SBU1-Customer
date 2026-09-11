@@ -3,9 +3,10 @@ import { eq } from 'drizzle-orm'
 import { getDb } from '@/db'
 import { quotations, quotationItems, quotationInstallments, customers, contracts, contractInstallments, activityLog } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
+import { getSettings } from '@/lib/settings'
 import { quoteTotals, n0, num, nstr, today } from '@/lib/biz'
 import { canEdit, halfSubs } from '@/lib/constants'
-import { defaultProjectName, defaultSite, addDays } from '@/lib/contract-defaults'
+import { defaultProjectName, defaultSite, defaultEmployerSigner, addDays } from '@/lib/contract-defaults'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,6 +45,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   ])
   const t = quoteTotals(q, items, [])
   const w = num(cust?.widthM), l = num(cust?.lengthM)
+  const settings = await getSettings()
 
   const [made] = await db.insert(contracts).values({
     quotationId: id,
@@ -65,6 +67,8 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     // ทุกอย่างที่เดาจากใบเสนอราคา/ลูกค้าได้ เติมให้หมด — ในหน้าร่างสัญญาแก้ทับได้
     projectName: defaultProjectName(cust ?? null, q.custName),
     siteAddress: defaultSite(cust ?? null, q.custAddress),
+    employerSigner: defaultEmployerSigner(q.custName || cust?.name || cust?.chname),
+    contractorSigner: settings.signerName || null,
     scopeIncluded: q.spec,
     scopeExcluded: q.exclusions,
     warrantyText: q.warranty,

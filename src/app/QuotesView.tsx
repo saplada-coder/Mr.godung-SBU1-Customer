@@ -634,7 +634,7 @@ export function CompanySettingsModal({ onClose, showToast }: { onClose: () => vo
       ))
       setFRaw({
         name: s.name || '', address: s.address || '', phone: s.phone || '', lineId: s.lineId || '', website: s.website || '',
-        email: s.email || '', taxId: s.taxId || '', bankPersonal: s.bankPersonal || '', bankCompany: s.bankCompany || '',
+        email: s.email || '', taxId: s.taxId || '', signerName: s.signerName || '', bankPersonal: s.bankPersonal || '', bankCompany: s.bankCompany || '',
         warrantyText: s.warrantyText || '', exclusionsText: s.exclusionsText || '',
         permitDays: String(s.permitDays ?? ''), buildDays: String(s.buildDays ?? ''), opFeePct: String(s.opFeePct ?? ''),
       })
@@ -677,6 +677,11 @@ export function CompanySettingsModal({ onClose, showToast }: { onClose: () => vo
           <div className="field"><label>เว็บไซต์</label><input value={f.website || ''} onChange={(e) => set('website', e.target.value)} /></div>
           <div className="field"><label>Email</label><input value={f.email || ''} onChange={(e) => set('email', e.target.value)} /></div>
           <div className="field"><label>เลขทะเบียนนิติบุคคล</label><input value={f.taxId || ''} onChange={(e) => set('taxId', e.target.value)} /></div>
+          <div className="field">
+            <label>ผู้มีอำนาจลงนามแทนบริษัท</label>
+            <input value={f.signerName || ''} onChange={(e) => set('signerName', e.target.value)} placeholder="เช่น นายวิเจน แก้วมณี" />
+            <div className="hintline">ขึ้นเป็นผู้ลงนามฝ่ายผู้รับจ้างในสัญญาทุกฉบับ ตั้งครั้งเดียว</div>
+          </div>
 
           <div className="fs"><div className="fs-t">ที่อยู่สำนักงานรายภูมิภาค</div></div>
           <div className="field full">

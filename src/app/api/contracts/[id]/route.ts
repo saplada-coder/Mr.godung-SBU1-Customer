@@ -55,6 +55,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if ('projectName' in b) p.projectName = str(b.projectName, 200)
   if ('siteAddress' in b) p.siteAddress = str(b.siteAddress, 2000)
   if ('contractorSigner' in b) p.contractorSigner = str(b.contractorSigner, 120)
+  if ('employerSigner' in b) p.employerSigner = str(b.employerSigner, 120)
   if ('workHours' in b) p.workHours = str(b.workHours, 60)
   if ('buildingSize' in b) p.buildingSize = str(b.buildingSize, 60)
   if ('scopeIncluded' in b) p.scopeIncluded = str(b.scopeIncluded, 20000)

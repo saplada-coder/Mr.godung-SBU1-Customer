@@ -10,7 +10,7 @@ export type SubRow = { title: string; amount: number }
 type Inst = { title: string; percent: number | null; amount: number; note: string; subs: SubRow[] }
 export type ContractInit = {
   id: number; code: string; status: string
-  projectName: string; siteAddress: string; contractorSigner: string
+  projectName: string; siteAddress: string; contractorSigner: string; employerSigner: string
   contractAmount: number; vatPct: number; whtPct: number
   buildDays: number; extendDays: number; startWithinDays: number; payWithinDays: number
   penaltyPerDay: number; workHours: string; warrantyYears: number
@@ -118,19 +118,27 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
           <label>ที่ตั้งโครงการ — ตำบล / อำเภอ / จังหวัด</label>
           <input value={f.siteAddress} disabled={locked} placeholder="เช่น ตำบลคูคต อำเภอลำลูกกา จังหวัดปทุมธานี"
             onChange={(e) => set('siteAddress', e.target.value)} />
-          {siteIncomplete
-            ? <div className="err">ยังไม่ครบ — ระบบเติมให้ได้แค่จังหวัด เพราะข้อมูลลูกค้าไม่มีตำบล/อำเภอ กรุณาเติมให้ครบก่อนพิมพ์</div>
-            : <div className="hintline">พิมพ์ออกที่หน้าปกสัญญาบรรทัดล่างสุด และในข้อ 1 ขอบเขตของงาน</div>}
-        </div>
-        <div className="field">
-          <label>ผู้มีอำนาจลงนาม (ฝ่ายผู้รับจ้าง)</label>
-          <input value={f.contractorSigner} disabled={locked} placeholder="เช่น นายวิเจน แก้วมณี"
-            onChange={(e) => set('contractorSigner', e.target.value)} />
+          <div className="hintline">
+            ดึงจากข้อมูลลูกค้า/ใบเสนอราคา · พิมพ์ออกที่หน้าปกบรรทัดล่างสุดและในข้อ 1
+            {siteIncomplete && ' · ยังไม่มีตำบล/อำเภอ — ถ้าทราบเติมได้ที่นี่ หรือใส่ที่ข้อมูลลูกค้าจะได้ใช้กับทุกสัญญาของรายนี้'}
+          </div>
         </div>
         <div className="field">
           <label>ผู้ว่าจ้าง (จากใบเสนอราคา)</label>
           <input readOnly value={ctx.employer || '—'} />
           <div className="hintline">ที่อยู่/เลขภาษีดึงจากใบเสนอราคา — แก้ได้ที่ใบเสนอราคา{ctx.employerTax ? ` · เลขภาษี ${ctx.employerTax}` : ''}</div>
+        </div>
+        <div className="field">
+          <label>ผู้ลงนามฝ่ายผู้ว่าจ้าง</label>
+          <input value={f.employerSigner} disabled={locked} placeholder="เช่น นายสมชาย ใจดี (กรรมการผู้จัดการ)"
+            onChange={(e) => set('employerSigner', e.target.value)} />
+          <div className="hintline">ลูกค้าบุคคลระบบใส่ชื่อลูกค้าให้แล้ว · ลูกค้าบริษัทให้ใส่ชื่อกรรมการผู้มีอำนาจ — พิมพ์ในวงเล็บใต้ลายเซ็นผู้ว่าจ้าง</div>
+        </div>
+        <div className="field">
+          <label>ผู้ลงนามฝ่ายผู้รับจ้าง (บริษัท)</label>
+          <input value={f.contractorSigner} disabled={locked} placeholder="เช่น นายวิเจน แก้วมณี"
+            onChange={(e) => set('contractorSigner', e.target.value)} />
+          <div className="hintline">ดึงจาก &quot;ตั้งค่าบริษัท / ใบเสนอราคา&quot; → ผู้มีอำนาจลงนาม ตั้งครั้งเดียวใช้ทุกสัญญา</div>
         </div>
         <div className="field">
           <label>ขนาดอาคาร</label>

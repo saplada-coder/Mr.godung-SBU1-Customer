@@ -232,6 +232,8 @@ export const companySettings = pgTable('company_settings', {
   website: varchar('website', { length: 160 }),
   email: varchar('email', { length: 160 }),
   taxId: varchar('tax_id', { length: 20 }),
+  /** ผู้มีอำนาจลงนามแทนบริษัท เช่น นายวิเจน แก้วมณี — ขึ้นในสัญญาทุกฉบับ ตั้งครั้งเดียว */
+  signerName: varchar('signer_name', { length: 120 }),
   logoUrl: text('logo_url'),
   /** บัญชีรับเงิน 2 แบบ (ข้อความหลายบรรทัด: เลขบัญชี/ชื่อ/ธนาคาร) */
   bankPersonal: text('bank_personal'),
@@ -390,6 +392,8 @@ export const contracts = pgTable(
     siteAddress: text('site_address'),
     /** ผู้มีอำนาจลงนามฝ่ายผู้รับจ้าง เช่น นายวิเจน แก้วมณี */
     contractorSigner: varchar('contractor_signer', { length: 120 }),
+    /** ผู้ลงนามฝ่ายผู้ว่าจ้าง — ลูกค้าบุคคลคือตัวลูกค้าเอง ลูกค้านิติบุคคลคือกรรมการผู้มีอำนาจ */
+    employerSigner: varchar('employer_signer', { length: 120 }),
     /** มูลค่าสัญญา (Lump Sum) ก่อน VAT */
     contractAmount: numeric('contract_amount', { precision: 14, scale: 2 }).notNull(),
     vatPct: numeric('vat_pct', { precision: 5, scale: 2 }),

@@ -17,6 +17,7 @@ export async function getSettings() {
     website: row?.website ?? '',
     email: row?.email ?? '',
     taxId: row?.taxId ?? '',
+    signerName: row?.signerName ?? '',
     logoUrl: row?.logoUrl ?? null,
     bankPersonal: row?.bankPersonal ?? '',
     bankCompany: row?.bankCompany ?? '',

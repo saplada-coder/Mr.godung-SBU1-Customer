@@ -5,7 +5,7 @@ import { getSettingsFor } from '@/lib/settings'
 import { n0, num } from '@/lib/biz'
 import { bahtText, thDateBE, thDateContract } from '@/lib/format'
 import { halfSubs } from '@/lib/constants'
-import { defaultProjectName, defaultSite, siteComplete, addDays } from '@/lib/contract-defaults'
+import { defaultProjectName, defaultSite, defaultEmployerSigner, addDays } from '@/lib/contract-defaults'
 import FitPages from '../../../fit-pages'
 
 /**
@@ -63,16 +63,19 @@ export async function loadContract(id: number) {
   }))
   // ช่องที่ยังว่างหรือยังไม่ครบในสัญญาเก่า (ร่างก่อนระบบเดาค่าให้) เติมจากใบเสนอราคา/ลูกค้าให้เองตอนเปิด แล้วบันทึกเลย
   // สิ่งที่คนพิมพ์เองไว้แล้วไม่ถูกทับ: ชื่อโครงการที่มีอยู่ ที่ตั้งที่มีตำบล/อำเภอ วันแล้วเสร็จที่กรอกแล้ว
+  const settings = await getSettingsFor(cust?.bu)
   const fill: Partial<typeof c> = {}
   if (!c.projectName) { const v = defaultProjectName(cust ?? null, q?.custName); if (v) fill.projectName = v }
-  if (!siteComplete(c.siteAddress)) { const v = defaultSite(cust ?? null, q?.custAddress); if (v && v !== c.siteAddress) fill.siteAddress = v }
+  // ที่ตั้งที่เป็นแค่ "จังหวัด…" ที่ระบบเคยเติมให้ ถือว่ายังไม่ได้กรอก — แทนด้วยของจริงจากลูกค้า/ใบเสนอราคาเมื่อมี
+  if (!c.siteAddress || /^จังหวัด\S*$/.test(c.siteAddress)) { const v = defaultSite(cust ?? null, q?.custAddress); if (v && v !== c.siteAddress) fill.siteAddress = v }
   if (!c.dueDate && c.signDate && c.buildDays) fill.dueDate = addDays(c.signDate, c.buildDays)
+  if (!c.employerSigner) { const v = defaultEmployerSigner(q?.custName || cust?.name || cust?.chname); if (v) fill.employerSigner = v }
+  if (!c.contractorSigner && settings.signerName) fill.contractorSigner = settings.signerName
   let contract = c
   if (Object.keys(fill).length) {
     await db.update(contracts).set(fill).where(eq(contracts.id, id))
     contract = { ...c, ...fill }
   }
-  const settings = await getSettingsFor(cust?.bu)
   return { c: contract, insts, q: q ?? null, cust: cust ?? null, settings }
 }
 
@@ -85,6 +88,7 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
   const employerAddr = q?.custAddress || cust?.province || ''
   const employerTax = q?.custTaxId || ''
   const signer = c.contractorSigner || ''
+  const employerSigner = c.employerSigner || ''
   const amount = n0(c.contractAmount)
   const vat = num(c.vatPct) ?? 0
   const wht = num(c.whtPct) ?? 0
@@ -103,7 +107,7 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
       <div>
         <div>ลงชื่อ…………………………………..ผู้ว่าจ้าง</div>
         <div className="b">{employer || '……………………………………'}</div>
-        <div>( ……………............……… )</div>
+        <div>( {employerSigner || '……………............………'} )</div>
         <div>{blank}</div>
       </div>
       <div>
@@ -158,7 +162,7 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
 
         <div className="cl-h">1. ขอบเขตของงาน</div>
         <p className="ind">
-          งานที่ <b>{employer || '……………'}</b> ที่อยู่ {employerAddr || '……………'}
+          งานที่ <b>{employer || '……………'}</b>{employerSigner && employerSigner !== employer && <> โดย {employerSigner}</>} ที่อยู่ {employerAddr || '……………'}
           {employerTax && <> เลขประจำตัวผู้เสียภาษี {employerTax}</>} ซึ่งต่อไปในรายละเอียดสัญญานี้เรียกว่า
           “ผู้ว่าจ้าง” ประสงค์ที่จะว่าจ้างให้ <b>{s.name}</b>{signer && <> โดย {signer}</>}
           {s.address && <> {s.address}</>}{s.phone && <> โทร {s.phone.split(',')[0].trim()}</>} ต่อไปในรายละเอียดสัญญานี้

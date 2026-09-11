@@ -37,7 +37,7 @@ export async function PUT(req: Request) {
 
   const values = {
     name: s(b.name, 160), address: s(b.address), phone: s(b.phone, 160), lineId: s(b.lineId, 60),
-    website: s(b.website, 160), email: s(b.email, 160), taxId: s(b.taxId, 20),
+    website: s(b.website, 160), email: s(b.email, 160), taxId: s(b.taxId, 20), signerName: s(b.signerName, 120),
     logoUrl: img(b.logoUrl), bankPersonal: s(b.bankPersonal), bankCompany: s(b.bankCompany),
     warrantyText: s(b.warrantyText), exclusionsText: s(b.exclusionsText),
     permitDays: n(b.permitDays), buildDays: n(b.buildDays),

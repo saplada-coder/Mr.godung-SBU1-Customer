@@ -8,11 +8,13 @@
 export const siteComplete = (s: string | null | undefined) => !!s && /ตำบล|ต\./.test(s) && /อำเภอ|อ\.|เขต/.test(s)
 
 /**
- * ที่ตั้งโครงการ: ที่กรอกไว้ที่ลูกค้าก่อน → ที่อยู่บนใบเสนอราคาถ้าละเอียดพอ (มีตำบล/อำเภอ) → จังหวัดนำไว้ให้อ่านเป็นที่อยู่
+ * ที่ตั้งโครงการ: ที่กรอกไว้ที่ลูกค้าก่อน → ที่อยู่ที่พิมพ์ไว้บนใบเสนอราคา → จังหวัดนำไว้ให้อ่านเป็นที่อยู่
+ * ที่อยู่บนใบเสนอราคาใช้ทั้งที่พิมพ์มา แม้ไม่มีตำบล/อำเภอ — เป็นข้อมูลที่ทีมกรอกเองแล้ว ไม่ควรให้กรอกซ้ำในสัญญา
  */
 export function defaultSite(cust: { siteAddress?: string | null; province?: string | null } | null, quoteAddress: string | null | undefined) {
   if (cust?.siteAddress) return cust.siteAddress
-  if (siteComplete(quoteAddress)) return quoteAddress!.trim()
+  const qa = (quoteAddress || '').trim()
+  if (qa) return qa
   return cust?.province ? `จังหวัด${cust.province}` : null
 }
 
@@ -24,6 +26,18 @@ export function defaultProjectName(cust: { cat?: string | null; name?: string | 
   if (cust?.cat) return `โครงการก่อสร้าง${cust.cat}`
   const who = quoteCustName || cust?.name || cust?.chname
   return who ? `โครงการก่อสร้าง ${who}` : null
+}
+
+/** ชื่อที่ขึ้นต้นแบบนิติบุคคล — ผู้ลงนามต้องเป็นกรรมการ ไม่ใช่ชื่อบริษัท จึงเดาให้ไม่ได้ */
+const COMPANY = /^(บริษัท|บจก|บมจ|หจก|ห\.จ\.ก|ห้างหุ้นส่วน|ร้าน)/
+
+/**
+ * ผู้ลงนามฝ่ายผู้ว่าจ้าง: ลูกค้าบุคคลธรรมดาเซ็นเอง ใช้ชื่อลูกค้าได้เลย
+ * ลูกค้าที่เป็นบริษัทต้องกรอกชื่อกรรมการผู้มีอำนาจ ปล่อยว่างให้กรอก
+ */
+export function defaultEmployerSigner(name: string | null | undefined) {
+  const s = (name || '').trim()
+  return s && !COMPANY.test(s) ? s : null
 }
 
 /** วันกำหนดแล้วเสร็จ = วันลงนาม + ระยะเวลาก่อสร้างจากใบเสนอราคา (YYYY-MM-DD) */

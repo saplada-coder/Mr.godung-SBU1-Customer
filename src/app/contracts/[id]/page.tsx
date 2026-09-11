@@ -24,6 +24,7 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
         projectName: c.projectName ?? '',
         siteAddress: c.siteAddress ?? '',
         contractorSigner: c.contractorSigner ?? '',
+        employerSigner: c.employerSigner ?? '',
         contractAmount: n0(c.contractAmount),
         vatPct: num(c.vatPct) ?? 0,
         whtPct: num(c.whtPct) ?? 0,
