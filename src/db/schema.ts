@@ -425,6 +425,8 @@ export const contractInstallments = pgTable(
     contractId: integer('contract_id').notNull().references(() => contracts.id, { onDelete: 'cascade' }),
     seq: integer('seq').notNull(),
     title: varchar('title', { length: 200 }).notNull(),
+    /** สัดส่วนของมูลค่าสัญญา — กรอก % แล้วระบบคิดบาทให้ หรือกรอกบาทแล้วคิด % กลับ */
+    percent: numeric('percent', { precision: 6, scale: 2 }),
     amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
     /** งวดย่อยแบบ "วัสดุเข้างาน / ติดตั้งเสร็จ" — JSON [{title, amount}] (null = ไม่แตกงวดย่อย) */
     subsJson: text('subs_json'),
@@ -687,7 +689,13 @@ export const purchaseOrders = pgTable(
     deliveryDate: date('delivery_date'),
     vatPct: numeric('vat_pct', { precision: 5, scale: 2 }),
     subtotal: numeric('subtotal', { precision: 14, scale: 2 }).notNull(),
+    /** ส่วนลดหักจากรวมเงินก่อนคิด VAT และหัก ณ ที่จ่าย */
+    discount: numeric('discount', { precision: 14, scale: 2 }).notNull().default('0'),
     vatAmount: numeric('vat_amount', { precision: 14, scale: 2 }).notNull().default('0'),
+    /** ภาษีหัก ณ ที่จ่าย (ปกติ 3%) คิดจากยอดหลังหักส่วนลด ก่อน VAT — เป็นเงินที่หักไว้จากผู้ขายแล้วนำส่งสรรพากรแทน */
+    whtPct: numeric('wht_pct', { precision: 5, scale: 2 }),
+    whtAmount: numeric('wht_amount', { precision: 14, scale: 2 }).notNull().default('0'),
+    /** ยอดจ่ายผู้ขายจริง = รวมเงิน − ส่วนลด + VAT − หัก ณ ที่จ่าย */
     total: numeric('total', { precision: 14, scale: 2 }).notNull(),
     note: text('note'),
     /** PO เป็นเอกสารเดียวที่ต้องอนุมัติ: รออนุมัติ → อนุมัติแล้ว / ตีกลับ (+ ยกเลิก) */

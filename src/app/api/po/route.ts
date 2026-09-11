@@ -25,7 +25,7 @@ export async function GET() {
       id: r.id, code: r.code, vendor: r.vendor, category: r.category,
       projectId: r.projectId, projectName: r.projectId != null ? projMap.get(r.projectId)?.name || projMap.get(r.projectId)?.code || '—' : '🏢 สำนักงาน',
       issueDate: r.issueDate, deliveryDate: r.deliveryDate,
-      subtotal: n0(r.subtotal), vatAmount: n0(r.vatAmount), total: n0(r.total),
+      subtotal: n0(r.subtotal), discount: n0(r.discount), vatAmount: n0(r.vatAmount), whtAmount: n0(r.whtAmount), total: n0(r.total),
       status: r.status, cancelReason: r.cancelReason,
       createdByName: r.createdBy ? userMap.get(r.createdBy) : null, createdAt: r.createdAt,
     })),
@@ -63,8 +63,14 @@ export async function POST(req: Request) {
   if (!items.length) return NextResponse.json({ error: 'เพิ่มรายการสั่งซื้ออย่างน้อย 1 รายการ' }, { status: 400 })
 
   const vatPct = num(b.vatPct) ?? 0
+  const whtPct = num(b.whtPct) ?? 0
   const subtotal = items.reduce((a, i) => a + i.amount, 0)
-  const vatAmount = Math.round(subtotal * vatPct / 100)
+  // ส่วนลดหักจากรวมเงินก่อน แล้ว VAT กับหัก ณ ที่จ่ายคิดจากยอดหลังหักส่วนลดทั้งคู่ — ส่วนลดห้ามเกินรวมเงิน
+  const discount = Math.min(subtotal, Math.max(0, num(b.discount) ?? 0))
+  const base = subtotal - discount
+  const vatAmount = Math.round(base * vatPct / 100)
+  const whtAmount = Math.round(base * whtPct / 100)
+  const total = base + vatAmount - whtAmount
   const issueDate = /^\d{4}-\d{2}-\d{2}$/.test(String(b.issueDate)) ? String(b.issueDate) : today()
   const code = await genPoCode(db, bu, issueDate)
   const category = ALL_EXPENSE_CAT_KEYS.includes(String(b.category)) ? String(b.category) : null
@@ -79,7 +85,8 @@ export async function POST(req: Request) {
     issueDate,
     deliveryDate: /^\d{4}-\d{2}-\d{2}$/.test(String(b.deliveryDate)) ? String(b.deliveryDate) : null,
     vatPct: vatPct ? String(vatPct) : null,
-    subtotal: String(subtotal), vatAmount: String(vatAmount), total: String(subtotal + vatAmount),
+    whtPct: whtPct ? String(whtPct) : null,
+    subtotal: String(subtotal), discount: String(discount), vatAmount: String(vatAmount), whtAmount: String(whtAmount), total: String(total),
     note: String(b.note ?? '').trim().slice(0, 2000) || null,
     status: auto ? 'อนุมัติแล้ว' : 'รออนุมัติ',
     approvedBy: auto ? me.id : null, approvedAt: auto ? new Date() : null,
@@ -94,7 +101,7 @@ export async function POST(req: Request) {
 
   await db.insert(activityLog).values({
     projectId, userId: me.id, action: 'po-create',
-    field: 'ใบสั่งซื้อ', newValue: `${code} ${vendor} ฿${(subtotal + vatAmount).toLocaleString()}${auto ? '' : ' (รออนุมัติ)'}`,
+    field: 'ใบสั่งซื้อ', newValue: `${code} ${vendor} ฿${total.toLocaleString()}${auto ? '' : ' (รออนุมัติ)'}`,
   })
   return NextResponse.json({ ok: true, id: po.id, code, status: po.status })
 }

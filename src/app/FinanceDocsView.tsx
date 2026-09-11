@@ -232,6 +232,8 @@ function PoModal({ projects, me, onClose, onSaved, showToast }: {
   const [f, setF] = useState({ vendor: '', vendorAddress: '', vendorPhone: '', category: 'material', issueDate: today, deliveryDate: '', note: '' })
   const [items, setItems] = useState<PoItemRow[]>([{ description: '', qty: '', unit: '', unitPrice: '', amount: '' }])
   const [vat, setVat] = useState(false)
+  const [wht, setWht] = useState(false)
+  const [discount, setDiscount] = useState('')
   const [busy, setBusy] = useState(false)
   void me
 
@@ -246,7 +248,12 @@ function PoModal({ projects, me, onClose, onSaved, showToast }: {
     return n
   })
   const subtotal = items.reduce((a, i) => a + (+i.amount || 0), 0)
-  const vatAmount = vat ? Math.round(subtotal * 7 / 100) : 0
+  // ลำดับเดียวกับฝั่งเซิร์ฟเวอร์: หักส่วนลดก่อน แล้ว VAT กับหัก ณ ที่จ่ายคิดจากยอดหลังหักส่วนลด
+  const disc = Math.min(subtotal, +discount || 0)
+  const base = subtotal - disc
+  const vatAmount = vat ? Math.round(base * 7 / 100) : 0
+  const whtAmount = wht ? Math.round(base * 3 / 100) : 0
+  const total = base + vatAmount - whtAmount
 
   const save = async () => {
     if (!f.vendor.trim()) { showToast('ระบุชื่อร้าน/ผู้ขาย'); return }
@@ -256,7 +263,7 @@ function PoModal({ projects, me, onClose, onSaved, showToast }: {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         projectId: projectId === '' ? null : +projectId,
-        ...f, vatPct: vat ? 7 : 0,
+        ...f, vatPct: vat ? 7 : 0, whtPct: wht ? 3 : 0, discount: disc,
         items: items.filter((i) => i.description.trim() && +i.amount > 0).map((i) => ({
           description: i.description, qty: i.qty === '' ? null : +i.qty, unit: i.unit,
           unitPrice: i.unitPrice === '' ? null : +i.unitPrice, amount: +i.amount,
@@ -310,17 +317,28 @@ function PoModal({ projects, me, onClose, onSaved, showToast }: {
             </div>
           </div>
 
-          <div className="field full" style={{ flexDirection: 'row', gap: 18, alignItems: 'center' }}>
+          <div className="field">
+            <label>ส่วนลด (บาท)</label>
+            <input inputMode="numeric" value={fmtC(discount)} onChange={(e) => setDiscount(stripC(e.target.value))} placeholder="0" />
+            {disc > 0 && disc < +discount && <div className="err">ส่วนลดเกินรวมเงิน — ใช้ได้สูงสุด ฿{commas(subtotal)}</div>}
+          </div>
+          <div className="field" style={{ justifyContent: 'flex-end', gap: 8 }}>
             <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
               <input type="checkbox" checked={vat} onChange={(e) => setVat(e.target.checked)} />VAT 7%
+            </label>
+            <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
+              <input type="checkbox" checked={wht} onChange={(e) => setWht(e.target.checked)} />หัก ณ ที่จ่าย 3%
             </label>
           </div>
           <div className="field full"><label>หมายเหตุ / เงื่อนไข</label><input value={f.note} onChange={(e) => setF((o) => ({ ...o, note: e.target.value }))} placeholder="เช่น ส่งของหน้างาน, เครดิต 30 วัน" /></div>
           <div className="field full">
             <div className="sumbox">
               <div><span>รวมเงิน</span><b>฿{commas(subtotal)}</b></div>
+              {disc > 0 && <div><span>ส่วนลด</span><b style={{ color: '#b0281c' }}>−฿{commas(disc)}</b></div>}
+              {disc > 0 && <div><span>หลังหักส่วนลด</span><b>฿{commas(base)}</b></div>}
               {vat && <div><span>VAT 7%</span><b>฿{commas(vatAmount)}</b></div>}
-              <div className="grand"><span>ยอดรวมสุทธิ</span><b>฿{commas(subtotal + vatAmount)}</b></div>
+              {wht && <div><span>หัก ณ ที่จ่าย 3%</span><b style={{ color: '#b0281c' }}>−฿{commas(whtAmount)}</b></div>}
+              <div className="grand"><span>ยอดจ่ายสุทธิ</span><b>฿{commas(total)}</b></div>
             </div>
           </div>
         </div>

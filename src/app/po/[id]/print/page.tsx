@@ -100,8 +100,13 @@ export default async function PoPrintPage({ params }: { params: Promise<{ id: st
           </div>
           <table className="totals"><tbody>
             <tr><td>รวมเงิน</td><td className="r">{fmt(n0(po.subtotal))}</td><td>บาท</td></tr>
+            {n0(po.discount) > 0 && <>
+              <tr><td>ส่วนลด</td><td className="r red">{fmt(n0(po.discount))}</td><td>บาท</td></tr>
+              <tr><td>ยอดหลังหักส่วนลด</td><td className="r">{fmt(n0(po.subtotal) - n0(po.discount))}</td><td>บาท</td></tr>
+            </>}
             {n0(po.vatAmount) > 0 && <tr><td>ภาษีมูลค่าเพิ่ม {Number(po.vatPct)}%</td><td className="r">{fmt(n0(po.vatAmount))}</td><td>บาท</td></tr>}
-            <tr className="grand"><td>ยอดรวมสุทธิ</td><td className="r hl2">{fmt(n0(po.total))}</td><td>บาท</td></tr>
+            {n0(po.whtAmount) > 0 && <tr><td>หัก ณ ที่จ่าย {Number(po.whtPct)}%</td><td className="r red">{fmt(n0(po.whtAmount))}</td><td>บาท</td></tr>}
+            <tr className="grand"><td>ยอดจ่ายสุทธิ</td><td className="r hl2">{fmt(n0(po.total))}</td><td>บาท</td></tr>
           </tbody></table>
         </div>
 
