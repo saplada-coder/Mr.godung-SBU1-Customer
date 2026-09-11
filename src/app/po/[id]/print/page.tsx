@@ -125,6 +125,20 @@ export default async function PoPrintPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
       </div>
+
+      {/* ---------- หน้าแนบท้าย: สำเนาบัตรประชาชนผู้ขาย (ประกอบหนังสือรับรองหัก ณ ที่จ่าย) ---------- */}
+      {po.vendorIdCard && (
+        <div className="page">
+          <div className="sec-t">เอกสารแนบท้ายใบสั่งซื้อ {po.code}</div>
+          <div className="idcard-t">สำเนาบัตรประชาชนผู้ขาย — {po.vendor}</div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="idcard" src={po.vendorIdCard} alt="สำเนาบัตรประชาชนผู้ขาย" />
+          <div className="idcard-cert">
+            ขอรับรองว่าเป็นสำเนาถูกต้อง ใช้เพื่อประกอบการหักภาษี ณ ที่จ่ายตามใบสั่งซื้อเลขที่ {po.code} เท่านั้น
+            <div className="idcard-sign">ลงชื่อ………………………...........………………..ผู้ขาย</div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -165,6 +179,12 @@ const PRINT_CSS = `
 .qprint .hl2{background:#38e838;font-weight:700;text-decoration:underline}
 .qprint .grand td{font-weight:700}
 .qprint .signs{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:30px;text-align:center;font-size:11.5px}
+/* หน้าแนบท้าย: สำเนาบัตรประชาชน — รูปกว้างครึ่งหน้า ไม่ขยายจนเบลอ และเว้นที่ให้เซ็นรับรองสำเนา */
+.qprint .sec-t{border:1px solid #333;text-align:center;font-weight:700;padding:4px;margin:0 0 14px}
+.qprint .idcard-t{font-weight:700;margin-bottom:10px}
+.qprint .idcard{display:block;width:60%;max-width:420px;margin:0 auto;border:1px solid #999;border-radius:6px}
+.qprint .idcard-cert{margin-top:22px;font-size:12px;line-height:1.7}
+.qprint .idcard-sign{margin-top:26px;text-align:right}
 .qprint .sig-space{height:34px}
 .qprint .sig-img{height:34px;object-fit:contain;display:block;margin:0 auto}
 .qprint .cancel-stamp{position:absolute;top:40%;left:50%;transform:translate(-50%,-50%) rotate(-18deg);font-size:64px;font-weight:800;color:rgba(200,16,46,.28);border:6px solid rgba(200,16,46,.28);border-radius:14px;padding:6px 30px;pointer-events:none}

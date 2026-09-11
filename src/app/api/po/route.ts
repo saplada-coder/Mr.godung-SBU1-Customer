@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { desc, eq } from 'drizzle-orm'
+import { desc, eq, isNotNull, sql } from 'drizzle-orm'
 import { getDb } from '@/db'
 import { purchaseOrders, poItems, projects, users, activityLog } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
@@ -14,7 +14,16 @@ export async function GET() {
   if (!me) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const db = getDb()
   const [rows, projs, allUsers] = await Promise.all([
-    db.select().from(purchaseOrders).orderBy(desc(purchaseOrders.id)),
+    // ไม่ดึง vendor_id_card มาทั้งรูป (data URL หลายร้อย KB ต่อใบ) — เอาแค่ว่ามีหรือไม่
+    db.select({
+      id: purchaseOrders.id, code: purchaseOrders.code, vendor: purchaseOrders.vendor, category: purchaseOrders.category,
+      projectId: purchaseOrders.projectId, issueDate: purchaseOrders.issueDate, deliveryDate: purchaseOrders.deliveryDate,
+      subtotal: purchaseOrders.subtotal, discount: purchaseOrders.discount, vatAmount: purchaseOrders.vatAmount,
+      whtAmount: purchaseOrders.whtAmount, total: purchaseOrders.total,
+      status: purchaseOrders.status, cancelReason: purchaseOrders.cancelReason,
+      createdBy: purchaseOrders.createdBy, createdAt: purchaseOrders.createdAt,
+      hasIdCard: sql<boolean>`${isNotNull(purchaseOrders.vendorIdCard)}`,
+    }).from(purchaseOrders).orderBy(desc(purchaseOrders.id)),
     db.select({ id: projects.id, name: projects.name, code: projects.code }).from(projects),
     db.select({ id: users.id, name: users.name, email: users.email }).from(users),
   ])
@@ -26,7 +35,7 @@ export async function GET() {
       projectId: r.projectId, projectName: r.projectId != null ? projMap.get(r.projectId)?.name || projMap.get(r.projectId)?.code || '—' : '🏢 สำนักงาน',
       issueDate: r.issueDate, deliveryDate: r.deliveryDate,
       subtotal: n0(r.subtotal), discount: n0(r.discount), vatAmount: n0(r.vatAmount), whtAmount: n0(r.whtAmount), total: n0(r.total),
-      status: r.status, cancelReason: r.cancelReason,
+      status: r.status, cancelReason: r.cancelReason, hasIdCard: !!r.hasIdCard,
       createdByName: r.createdBy ? userMap.get(r.createdBy) : null, createdAt: r.createdAt,
     })),
   })
@@ -88,6 +97,8 @@ export async function POST(req: Request) {
     whtPct: whtPct ? String(whtPct) : null,
     subtotal: String(subtotal), discount: String(discount), vatAmount: String(vatAmount), whtAmount: String(whtAmount), total: String(total),
     note: String(b.note ?? '').trim().slice(0, 2000) || null,
+    // รับเฉพาะรูปแบบ data URL ของรูป และไม่เกินขนาดที่ฝั่งหน้าจอบีบอัดมาให้ (pickImage จำกัด ~850KB)
+    vendorIdCard: typeof b.vendorIdCard === 'string' && /^data:image\//.test(b.vendorIdCard) && b.vendorIdCard.length <= 900_000 ? b.vendorIdCard : null,
     status: auto ? 'อนุมัติแล้ว' : 'รออนุมัติ',
     approvedBy: auto ? me.id : null, approvedAt: auto ? new Date() : null,
     createdBy: me.id,

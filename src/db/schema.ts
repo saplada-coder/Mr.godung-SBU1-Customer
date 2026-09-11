@@ -698,6 +698,8 @@ export const purchaseOrders = pgTable(
     /** ยอดจ่ายผู้ขายจริง = รวมเงิน − ส่วนลด + VAT − หัก ณ ที่จ่าย */
     total: numeric('total', { precision: 14, scale: 2 }).notNull(),
     note: text('note'),
+    /** สำเนาบัตรประชาชนผู้ขาย (data URL) — ใช้ประกอบหนังสือรับรองหัก ณ ที่จ่าย · รายการ PO ไม่ดึงคอลัมน์นี้เพราะหนัก */
+    vendorIdCard: text('vendor_id_card'),
     /** PO เป็นเอกสารเดียวที่ต้องอนุมัติ: รออนุมัติ → อนุมัติแล้ว / ตีกลับ (+ ยกเลิก) */
     status: varchar('status', { length: 12 }).notNull().default('รออนุมัติ'),
     approvedBy: integer('approved_by').references(() => users.id),

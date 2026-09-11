@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BILL_KINDS, billKindMeta, COST_CATS, OFFICE_CATS, canEdit, isAdminUp, type Role } from '@/lib/constants'
 import { commas, thDate } from '@/lib/format'
-import { uiPrompt, type InstRow } from './biz-shared'
+import { pickImage, uiPrompt, type InstRow } from './biz-shared'
 import { CustLink } from './CustomerDocs'
 import { BillingModal, BillDetailModal } from './ProjectsView'
 import { CustomerPicker } from './QuotesView'
@@ -234,6 +234,8 @@ function PoModal({ projects, me, onClose, onSaved, showToast }: {
   const [vat, setVat] = useState(false)
   const [wht, setWht] = useState(false)
   const [discount, setDiscount] = useState('')
+  // สำเนาบัตรประชาชนผู้ขาย — ต้องมีเมื่อหัก ณ ที่จ่าย เพื่อออกหนังสือรับรอง 50 ทวิ
+  const [idCard, setIdCard] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   void me
 
@@ -263,7 +265,7 @@ function PoModal({ projects, me, onClose, onSaved, showToast }: {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         projectId: projectId === '' ? null : +projectId,
-        ...f, vatPct: vat ? 7 : 0, whtPct: wht ? 3 : 0, discount: disc,
+        ...f, vatPct: vat ? 7 : 0, whtPct: wht ? 3 : 0, discount: disc, vendorIdCard: idCard,
         items: items.filter((i) => i.description.trim() && +i.amount > 0).map((i) => ({
           description: i.description, qty: i.qty === '' ? null : +i.qty, unit: i.unit,
           unitPrice: i.unitPrice === '' ? null : +i.unitPrice, amount: +i.amount,
@@ -322,13 +324,38 @@ function PoModal({ projects, me, onClose, onSaved, showToast }: {
             <input inputMode="numeric" value={fmtC(discount)} onChange={(e) => setDiscount(stripC(e.target.value))} placeholder="0" />
             {disc > 0 && disc < +discount && <div className="err">ส่วนลดเกินรวมเงิน — ใช้ได้สูงสุด ฿{commas(subtotal)}</div>}
           </div>
-          <div className="field" style={{ justifyContent: 'flex-end', gap: 8 }}>
-            <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
-              <input type="checkbox" checked={vat} onChange={(e) => setVat(e.target.checked)} />VAT 7%
-            </label>
-            <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
-              <input type="checkbox" checked={wht} onChange={(e) => setWht(e.target.checked)} />หัก ณ ที่จ่าย 3%
-            </label>
+          <div className="field">
+            <label>ภาษี</label>
+            {/* .field label ถูกจัดเป็นบล็อกหัวช่อง ช่องติ๊กจึงต้องเป็น span ไม่งั้นข้อความจะโดนดันไปคนละบรรทัดกับกล่อง */}
+            <div style={{ display: 'flex', gap: 18, alignItems: 'center', minHeight: 38 }}>
+              <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center', cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap' }} onClick={() => setVat((v) => !v)}>
+                <input type="checkbox" checked={vat} readOnly />VAT 7%
+              </span>
+              <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center', cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap' }} onClick={() => setWht((v) => !v)}>
+                <input type="checkbox" checked={wht} readOnly />หัก ณ ที่จ่าย 3%
+              </span>
+            </div>
+          </div>
+
+          <div className="field full">
+            <label>สำเนาบัตรประชาชนผู้ขาย</label>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              {idCard ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={idCard} alt="บัตรประชาชนผู้ขาย" style={{ width: 160, height: 100, objectFit: 'cover', borderRadius: 9, border: '1px solid var(--border)' }} />
+                  <button type="button" className="btn btn-sm" onClick={() => pickImage(setIdCard, showToast)}>เปลี่ยนรูป</button>
+                  <button type="button" className="btn btn-sm" style={{ color: '#b0281c' }} onClick={() => setIdCard(null)}>เอาออก</button>
+                </>
+              ) : (
+                <button type="button" className="btn" onClick={() => pickImage(setIdCard, showToast)}>📷 แนบรูปบัตรประชาชน</button>
+              )}
+            </div>
+            <div className="hintline">
+              {wht
+                ? 'ผู้ขายที่เป็นบุคคลธรรมดาต้องใช้เลขบัตรและที่อยู่ตามบัตรออกหนังสือรับรองหัก ณ ที่จ่าย (50 ทวิ) — แนบไว้ที่นี่จะพิมพ์เป็นหน้าแนบท้าย PO ให้ · ผู้ขายที่เป็นบริษัทไม่ต้องแนบ'
+                : 'ไม่บังคับ — แนบไว้ถ้าผู้ขายเป็นบุคคลธรรมดาที่ต้องหัก ณ ที่จ่าย จะได้ไม่ต้องตามขอทีหลัง'}
+            </div>
           </div>
           <div className="field full"><label>หมายเหตุ / เงื่อนไข</label><input value={f.note} onChange={(e) => setF((o) => ({ ...o, note: e.target.value }))} placeholder="เช่น ส่งของหน้างาน, เครดิต 30 วัน" /></div>
           <div className="field full">
