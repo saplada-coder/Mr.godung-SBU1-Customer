@@ -76,6 +76,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       .map((x, i) => ({
         contractId: id, seq: i + 1,
         title: String(x.title ?? '').trim().slice(0, 200),
+        percent: nstr(num(x.percent)),
         amount: String(num(x.amount) ?? 0),
         subsJson: parseSubs(x.subs),
         note: str(x.note, 4000),

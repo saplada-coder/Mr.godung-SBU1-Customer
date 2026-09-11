@@ -44,6 +44,7 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
         dueDate: c.dueDate ?? '',
         installments: insts.map((i) => ({
           title: i.title,
+          percent: num(i.percent),
           amount: n0(i.amount),
           note: i.note ?? '',
           subs: parseSubs(i.subsJson),

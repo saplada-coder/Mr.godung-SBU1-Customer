@@ -6,7 +6,7 @@ import { bahtText } from '@/lib/format'
 import { uiConfirm } from '../../biz-shared'
 
 export type SubRow = { title: string; amount: number }
-type Inst = { title: string; amount: number; note: string; subs: SubRow[] }
+type Inst = { title: string; percent: number | null; amount: number; note: string; subs: SubRow[] }
 export type ContractInit = {
   id: number; code: string; status: string
   projectName: string; siteAddress: string; contractorSigner: string
@@ -35,6 +35,7 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
     setF((o) => ({ ...o, installments: o.installments.map((x, n) => (n === i ? { ...x, ...patch } : x)) }))
 
   const instTotal = f.installments.reduce((a, i) => a + (i.amount || 0), 0)
+  const pctTotal = Math.round(f.installments.reduce((a, i) => a + (i.percent || 0), 0) * 100) / 100
   const diff = Math.round(instTotal - f.contractAmount)
   /** ที่ตั้งโครงการต้องมีทั้งตำบลและอำเภอ ไม่ใช่แค่จังหวัดที่ระบบเติมให้ตอนสร้าง */
   const siteIncomplete = !/ตำบล|ต\./.test(f.siteAddress) || !/อำเภอ|อ\.|เขต/.test(f.siteAddress)
@@ -188,8 +189,19 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
                   <span style={{ fontSize: 12, color: 'var(--text-dim)', whiteSpace: 'nowrap', fontWeight: 700 }}>6.1.{i + 1}</span>
                   <input value={it.title} disabled={locked} placeholder="ชื่องวด เช่น งานฐานราก"
                     onChange={(e) => setInst(i, { title: e.target.value })} style={{ flex: 1 }} />
+                  {/* % กับบาทผูกกัน: พิมพ์ % ระบบคิดบาทจากมูลค่าสัญญา · พิมพ์บาท ระบบคิด % กลับให้ */}
+                  <input type="number" value={it.percent === null ? '' : String(it.percent)} disabled={locked} placeholder="%"
+                    title="เปอร์เซ็นต์ของมูลค่าสัญญา" style={{ width: 76 }} step="0.01"
+                    onChange={(e) => {
+                      const pct = e.target.value === '' ? null : Number(e.target.value)
+                      setInst(i, { percent: pct, amount: pct == null ? it.amount : Math.round(f.contractAmount * pct / 100) })
+                    }} />
+                  <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>%</span>
                   <input type="number" value={String(it.amount)} disabled={locked} style={{ width: 140 }}
-                    onChange={(e) => setInst(i, { amount: Number(e.target.value) || 0 })} />
+                    onChange={(e) => {
+                      const amt = Number(e.target.value) || 0
+                      setInst(i, { amount: amt, percent: f.contractAmount > 0 ? Math.round(amt / f.contractAmount * 10000) / 100 : it.percent })
+                    }} />
                   {!locked && (
                     <button type="button" className="btn btn-sm" style={{ color: '#b0281c' }}
                       onClick={() => setF((o) => ({ ...o, installments: o.installments.filter((_, n) => n !== i) }))}>ลบ</button>
@@ -239,10 +251,10 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
             ))}
             {!locked && (
               <button type="button" className="btn"
-                onClick={() => setF((o) => ({ ...o, installments: [...o.installments, { title: '', amount: 0, note: '', subs: [] }] }))}>+ เพิ่มงวด</button>
+                onClick={() => setF((o) => ({ ...o, installments: [...o.installments, { title: '', percent: null, amount: 0, note: '', subs: [] }] }))}>+ เพิ่มงวด</button>
             )}
             <div className="hintline" style={{ fontSize: 12.5 }}>
-              รวมงวดงาน ฿{money(instTotal)} · มูลค่าสัญญา ฿{money(f.contractAmount)}
+              รวมงวดงาน ฿{money(instTotal)} ({pctTotal.toFixed(pctTotal % 1 ? 2 : 0)}%) · มูลค่าสัญญา ฿{money(f.contractAmount)}
               {diff !== 0 && <b style={{ color: '#b0281c' }}> · ต่างกัน {diff > 0 ? '+' : ''}{money(diff)} บาท</b>}
             </div>
           </div>

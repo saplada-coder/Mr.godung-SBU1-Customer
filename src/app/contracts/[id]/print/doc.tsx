@@ -234,6 +234,7 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
                     {i.note && <div className="inote pre">{i.note}</div>}
                   </td>
                   <td className="amt">
+                    {num(i.percent) != null && <span className="pct">({Number(i.percent)}%) </span>}
                     เป็นเงิน <b className="mark">{int(n0(i.amount))} บาท</b>
                     {subs.length > 1 && <> ชำระ {subs.length} งวด</>}
                   </td>
@@ -443,6 +444,7 @@ export const CONTRACT_CSS = `
 .ctr table.inst td.no{width:52px;white-space:nowrap}
 .ctr table.inst td.amt{width:215px;text-align:right;white-space:nowrap}
 .ctr table.inst .mark{background:#f6e83a;padding:0 4px}
+.ctr table.inst .pct{color:#555;font-size:11.5px}
 .ctr table.inst .sub{padding-left:16px;color:#c00;display:flex;justify-content:space-between;gap:10px}
 .ctr table.inst .sub .samt{color:#111;white-space:nowrap}
 .ctr table.inst .inote{color:#555;font-size:12px}

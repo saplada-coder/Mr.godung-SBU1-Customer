@@ -73,7 +73,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   const rows = [...insts].sort((a, b) => a.seq - b.seq)
   if (rows.length) {
     await db.insert(contractInstallments).values(rows.map((i, n) => ({
-      contractId: made.id, seq: n + 1, title: i.title, amount: String(n0(i.amount)), note: i.detail,
+      contractId: made.id, seq: n + 1, title: i.title, percent: i.percent, amount: String(n0(i.amount)), note: i.detail,
       // งวดที่ 1 เป็นมัดจำจ่ายก้อนเดียว ตั้งแต่งวดที่ 2 แตกครึ่ง "วัสดุเข้างาน / ติดตั้งเสร็จ" ตามฟอร์มสัญญาจริง
       subsJson: n === 0 ? null : JSON.stringify(halfSubs(n0(i.amount))),
     })))
