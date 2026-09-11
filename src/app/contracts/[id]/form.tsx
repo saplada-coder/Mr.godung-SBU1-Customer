@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { CONTRACT_STATUSES, contractMeta, isAdminUp, type Role } from '@/lib/constants'
+import { CONTRACT_STATUSES, contractMeta, halfSubs, isAdminUp, type Role } from '@/lib/constants'
 import { bahtText } from '@/lib/format'
 import { uiConfirm } from '../../biz-shared'
 
@@ -54,6 +54,16 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
     } catch {
       setMsg({ t: 'เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง', err: true }); return false
     } finally { setBusy(false) }
+  }
+
+  /** แตกงวดที่ 2 เป็นต้นไปเป็นสองครึ่งตามฟอร์ม — งวดที่มีงวดย่อยอยู่แล้วจะถูกทับ จึงถามก่อน */
+  const splitHalves = async () => {
+    const hasSubs = f.installments.some((it, i) => i > 0 && it.subs.length > 0)
+    if (hasSubs && !await uiConfirm('บางงวดมีงวดย่อยอยู่แล้ว — แตกใหม่เป็น 50/50 ทับของเดิมทั้งหมด?')) return
+    setF((o) => ({
+      ...o,
+      installments: o.installments.map((it, i) => (i === 0 ? it : { ...it, subs: halfSubs(it.amount || 0) })),
+    }))
   }
 
   const remove = async () => {
@@ -161,7 +171,15 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
           </div>
         </div>
 
-        <div className="fs"><div className="fs-t">งวดงาน (ข้อ 6)</div></div>
+        <div className="fs">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <div className="fs-t">งวดงาน (ข้อ 6)</div>
+            {!locked && f.installments.length > 1 && (
+              <button type="button" className="btn btn-sm" onClick={splitHalves}>แตกครึ่งตั้งแต่งวดที่ 2</button>
+            )}
+          </div>
+          <div className="hintline">ตามฟอร์มสัญญา งวดที่ 1 เป็นมัดจำก้อนเดียว ตั้งแต่งวดที่ 2 แตกเป็น &quot;วัสดุเข้างาน / ติดตั้งเสร็จ&quot; อย่างละ 50%</div>
+        </div>
         <div className="field full">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {f.installments.map((it, i) => (
@@ -190,6 +208,25 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
                     )}
                   </div>
                 ))}
+                {it.subs.length > 0 && (() => {
+                  // งวดย่อยต้องรวมกันได้เท่ายอดงวดหลัก ไม่งั้นตอนพิมพ์ตัวเลขในสัญญาจะขัดกันเอง
+                  const subTotal = it.subs.reduce((a, s) => a + (s.amount || 0), 0)
+                  const gap = Math.round((it.amount || 0) - subTotal)
+                  return gap === 0
+                    ? <div className="hintline" style={{ paddingLeft: 26 }}>งวดย่อยรวม ฿{money(subTotal)} ตรงกับยอดงวด</div>
+                    : (
+                      <div className="err" style={{ paddingLeft: 26, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                        งวดย่อยรวม ฿{money(subTotal)} {gap > 0 ? 'ขาด' : 'เกิน'}ยอดงวดอยู่ ฿{money(Math.abs(gap))}
+                        {!locked && (
+                          <button type="button" className="btn btn-sm"
+                            title="ปรับงวดย่อยสุดท้ายให้รวมกันเท่ายอดงวดพอดี"
+                            onClick={() => setInst(i, { subs: it.subs.map((x, n) => (n === it.subs.length - 1 ? { ...x, amount: Math.max(0, (x.amount || 0) + gap) } : x)) })}>
+                            ปรับงวดสุดท้ายให้ลงตัว
+                          </button>
+                        )}
+                      </div>
+                    )
+                })()}
                 <textarea value={it.note} disabled={locked} placeholder="รายละเอียดงวด (ไม่บังคับ)" rows={2}
                   onChange={(e) => setInst(i, { note: e.target.value })} />
                 {!locked && (

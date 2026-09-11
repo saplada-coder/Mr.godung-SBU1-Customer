@@ -4,7 +4,7 @@ import { getDb } from '@/db'
 import { quotations, quotationItems, quotationInstallments, customers, contracts, contractInstallments, activityLog } from '@/db/schema'
 import { getSessionUser } from '@/lib/auth'
 import { quoteTotals, n0, num, nstr, today } from '@/lib/biz'
-import { canEdit } from '@/lib/constants'
+import { canEdit, halfSubs } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
@@ -74,6 +74,8 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   if (rows.length) {
     await db.insert(contractInstallments).values(rows.map((i, n) => ({
       contractId: made.id, seq: n + 1, title: i.title, amount: String(n0(i.amount)), note: i.detail,
+      // งวดที่ 1 เป็นมัดจำจ่ายก้อนเดียว ตั้งแต่งวดที่ 2 แตกครึ่ง "วัสดุเข้างาน / ติดตั้งเสร็จ" ตามฟอร์มสัญญาจริง
+      subsJson: n === 0 ? null : JSON.stringify(halfSubs(n0(i.amount))),
     })))
   }
   await db.insert(activityLog).values({
