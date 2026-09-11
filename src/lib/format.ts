@@ -4,6 +4,13 @@ export const fmtB = (n: number) =>
 export const Mv = (n: number) => n / 1e6
 
 export const TH_MONTHS = ['', 'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
+export const TH_MONTHS_FULL = ['', 'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม']
+/** วันที่แบบเขียนเต็มในสัญญา: "วันที่ 1 เดือน กันยายน พ.ศ. 2569" — ว่างให้เป็นช่องจุดไว้กรอกมือ */
+export const thDateContract = (s: string | null | undefined) => {
+  if (!s) return 'วันที่ ……… เดือน ……………… พ.ศ. ………'
+  const p = s.split('-')
+  return `วันที่ ${+p[2]} เดือน ${TH_MONTHS_FULL[+p[1]]} พ.ศ. ${+p[0] + 543}`
+}
 
 export const DAY = 864e5
 export const toMs = (s: string) => {

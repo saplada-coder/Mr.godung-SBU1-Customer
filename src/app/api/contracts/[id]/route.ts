@@ -16,13 +16,17 @@ const dateOk = (v: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v)) ? String(v
 
 type SubRow = { title: string; amount: number }
 
-/** งวดย่อยของงวดหนึ่ง — เก็บเป็น JSON ในคอลัมน์เดียว เพราะมีอย่างมากสองสามบรรทัดต่องวด */
+/**
+ * งวดย่อยของงวดหนึ่ง — เก็บเป็น JSON ในคอลัมน์เดียว เพราะมีอย่างมากสองสามบรรทัดต่องวด
+ * ส่งมาเป็นอาเรย์ว่างเก็บเป็น "[]" ไม่ใช่ null: null แปลว่า "ยังไม่เคยตั้ง" แล้วระบบจะแตก 50/50 ให้ตอนโหลด
+ * ส่วน "[]" แปลว่าคนตั้งใจเอางวดย่อยออก ต้องคงไว้แบบนั้น
+ */
 function parseSubs(v: unknown): string | null {
   if (!Array.isArray(v)) return null
   const rows: SubRow[] = v
     .map((x) => ({ title: String((x as SubRow)?.title ?? '').trim().slice(0, 160), amount: num((x as SubRow)?.amount) ?? 0 }))
     .filter((x) => x.title || x.amount)
-  return rows.length ? JSON.stringify(rows) : null
+  return JSON.stringify(rows)
 }
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {

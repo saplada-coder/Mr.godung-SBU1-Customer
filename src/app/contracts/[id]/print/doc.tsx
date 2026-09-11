@@ -3,7 +3,8 @@ import { getDb } from '@/db'
 import { contracts, contractInstallments, quotations, customers } from '@/db/schema'
 import { getSettingsFor } from '@/lib/settings'
 import { n0, num } from '@/lib/biz'
-import { bahtText, thDateBE } from '@/lib/format'
+import { bahtText, thDateBE, thDateContract } from '@/lib/format'
+import { halfSubs } from '@/lib/constants'
 import FitPages from '../../../fit-pages'
 
 /**
@@ -26,17 +27,41 @@ const Cl = ({ n, children }: { n: string; children: React.ReactNode }) => (
   <div className="cl"><span className="cl-n">{n}</span><div className="cl-b">{children}</div></div>
 )
 
+/** ชื่องวดย่อยชุดเก่าที่ระบบเคยตั้งให้ — ถือว่าเป็นค่าเริ่มต้นที่ยังไม่มีใครแก้ จึงเปลี่ยนเป็นชื่อชุดใหม่ได้โดยไม่ถามซ้ำ */
+const LEGACY_SUB_TITLES = ['วัสดุเข้างาน', 'ติดตั้งเสร็จ']
+
+/**
+ * จัดงวดย่อยให้ตรงฟอร์มโดยอัตโนมัติ — งวดที่ 2 ขึ้นไปต้องเป็น "งวดที่ N.1 / N.2" อย่างละ 50%
+ * ทำตอนโหลดและเขียนกลับลงฐานข้อมูลเลย ทีมจะได้ไม่ต้องไล่กดปุ่มทุกสัญญาที่ร่างไว้ก่อนกติกานี้
+ * แตะเฉพาะสองกรณี: ยังไม่เคยตั้งงวดย่อยเลย (null) หรือมีชุดชื่อเก่าที่ระบบตั้งให้ — งวดที่คนแก้เองไว้ไม่ถูกทับ
+ * รวมถึงงวดที่คนตั้งใจลบงวดย่อยออกจนว่าง ซึ่งบันทึกไว้เป็น "[]" ไม่ใช่ null จึงแยกจากกรณีไม่เคยตั้งได้
+ */
+function normalizedSubs(inst: typeof contractInstallments.$inferSelect, idx: number): string | null {
+  if (idx === 0) return inst.subsJson
+  if (inst.subsJson == null) return JSON.stringify(halfSubs(n0(inst.amount), idx + 1))
+  const cur = subsOf(inst.subsJson)
+  const legacy = cur.length === 2 && cur.every((s, m) => s.title === LEGACY_SUB_TITLES[m])
+  if (!legacy) return inst.subsJson
+  return JSON.stringify(cur.map((s, m) => ({ ...s, title: `งวดที่ ${idx + 1}.${m + 1}` })))
+}
+
 export async function loadContract(id: number) {
   const db = getDb()
   const [c] = await db.select().from(contracts).where(eq(contracts.id, id)).limit(1)
   if (!c) return null
-  const [insts, [q], [cust]] = await Promise.all([
+  const [raw, [q], [cust]] = await Promise.all([
     db.select().from(contractInstallments).where(eq(contractInstallments.contractId, id)),
     db.select().from(quotations).where(eq(quotations.id, c.quotationId)).limit(1),
     db.select().from(customers).where(eq(customers.id, c.customerId)).limit(1),
   ])
+  const sorted = [...raw].sort((a, b) => a.seq - b.seq)
+  const insts = await Promise.all(sorted.map(async (i, idx) => {
+    const subsJson = normalizedSubs(i, idx)
+    if (subsJson !== i.subsJson) await db.update(contractInstallments).set({ subsJson }).where(eq(contractInstallments.id, i.id))
+    return { ...i, subsJson }
+  }))
   const settings = await getSettingsFor(cust?.bu)
-  return { c, insts: [...insts].sort((a, b) => a.seq - b.seq), q: q ?? null, cust: cust ?? null, settings }
+  return { c, insts, q: q ?? null, cust: cust ?? null, settings }
 }
 
 export type ContractDocData = NonNullable<Awaited<ReturnType<typeof loadContract>>>
@@ -187,7 +212,7 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
           ผู้รับจ้างมีหน้าที่ดูแลรักษารั้วเดิมของผู้ว่าจ้าง ยกเว้นได้รับการอนุมัติจากผู้ว่าจ้างในการกำหนดช่องเปิดสำหรับ
           เส้นทางลำเลียง ทั้งนี้ผู้รับจ้างจะต้องจัดทำแผนผังแสดงผ่านตัวแทนของผู้ว่าจ้างเพื่อพิจารณาอนุมัติก่อนการดำเนินการ
         </Cl>
-        <Cl n="4.2">ผู้รับจ้างมีหน้าที่ดำเนินการให้มีไฟฟ้าแสงสว่างและน้ำประปาตามที่ผู้รับจ้างเห็นว่าจำเป็น</Cl>
+        <Cl n="4.2">ผู้รับจ้างมีหน้าที่ดำเนินการให้มีไฟฟ้าแสงสว่างและน้ำประปาตามที่ผู้รับจ้างเห็นว่าจำเป็น โดยค่าใช้จ่ายเป็นของผู้ว่าจ้างตามที่ระบุไว้ในข้อ 1.2.3</Cl>
         <Cl n="4.3">ผู้รับจ้างมีหน้าที่ห้ามบุคคลใด ๆ พักอาศัยและ/หรือประกอบอาหารภายในสถานที่ก่อสร้าง</Cl>
         <Cl n="4.4">ผู้รับจ้างมีหน้าที่ปฏิบัติตามประกาศกระทรวงมหาดไทย เรื่องความปลอดภัยในการทำงานก่อสร้าง</Cl>
 
@@ -216,30 +241,42 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
         <div className="hl-red">
           กำหนดการชำระ เมื่องานแล้วเสร็จ ตามงวดงานดังต่อไปนี้ ภายใน {payWithin} วัน นับแต่วันเซ็นอนุมัติส่งสอบงาน
         </div>
+        {/* จัดตามฟอร์มจริง: งวดหลักหนึ่งแถว งวดย่อยเป็นแถวของตัวเองเยื้องเข้าและเป็นตัวแดง
+            ยอดเงินทุกแถวอยู่คอลัมน์ขวาเดียวกัน จะได้ไล่สายตาลงมาเป็นเส้นตรง · งวดที่ 1 ใส่ "เมื่อเซ็นสัญญา วันที่" ต่อท้ายเหมือนฟอร์ม */}
         <table className="inst">
           <tbody>
             {insts.map((i, n) => {
               const subs = subsOf(i.subsJson)
-              return (
-                <tr key={i.id}>
+              const amt = n0(i.amount)
+              return [
+                <tr key={i.id} className="main">
                   <td className="no">6.1.{n + 1}</td>
-                  <td>
-                    <div className="b">{i.title}</div>
-                    {subs.map((sb, m) => (
-                      <div className="sub" key={m}>
-                        <span><span className="sno">6.1.{n + 1}.{m + 1}</span> {sb.title}</span>
-                        <span className="samt">ชำระเป็น {int(sb.amount)} บาท</span>
-                      </div>
-                    ))}
-                    {i.note && <div className="inote pre">{i.note}</div>}
-                  </td>
+                  <td className="b">{i.title}</td>
                   <td className="amt">
-                    {num(i.percent) != null && <span className="pct">({Number(i.percent)}%) </span>}
-                    เป็นเงิน <b className="mark">{int(n0(i.amount))} บาท</b>
+                    {/* งวดที่แตกงวดย่อยโชว์ % ที่งวดย่อย (50/50) เท่านั้น ไม่ซ้อน % ของงวดหลักอีกชั้น */}
+                    {subs.length === 0 && num(i.percent) != null && <span className="pct">({Number(i.percent)}%) </span>}
+                    เป็นเงิน <b className="mark">{int(amt)} บาท</b>
                     {subs.length > 1 && <> ชำระ {subs.length} งวด</>}
+                    {n === 0 && subs.length === 0 && <> เมื่อเซ็นสัญญาก่อสร้าง วันที่ {c.signDate ? thDateBE(c.signDate) : '-'}</>}
                   </td>
-                </tr>
-              )
+                </tr>,
+                ...subs.map((sb, m) => {
+                  const pct = amt > 0 ? Math.round(sb.amount / amt * 1000) / 10 : null
+                  return (
+                    <tr key={`${i.id}-${m}`} className="sub">
+                      <td />
+                      <td><span className="sno">6.1.{n + 1}.{m + 1}</span> {sb.title}{pct != null && <span className="pct"> ({pct}%)</span>}</td>
+                      <td className="amt">ชำระเป็น {int(sb.amount)} บาท</td>
+                    </tr>
+                  )
+                }),
+                ...(i.note ? [
+                  <tr key={`${i.id}-note`} className="note">
+                    <td />
+                    <td colSpan={2} className="inote pre">{i.note}</td>
+                  </tr>,
+                ] : []),
+              ]
             })}
             <tr className="sum">
               <td />
@@ -283,7 +320,7 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
           หากมีการแจ้งเปลี่ยนแปลงหรือแก้ไขรายละเอียดไปจากแบบก่อสร้างเดิมเป็นลายลักษณ์อักษรจากผู้ว่าจ้าง ผู้รับจ้าง
           สามารถแจ้งรายละเอียดข้อมูลค่างานที่เพิ่ม-ลดให้กับทางผู้ว่าจ้างเพื่อพิจารณาอนุมัติ โดยที่มูลค่าจะต้องเป็นที่ยอมรับ
           ทั้งสองฝ่าย และหากงานดังกล่าวมีผลต่อระยะเวลาการก่อสร้าง ผู้รับจ้างสามารถชี้แจงรายละเอียดต่อผู้ว่าจ้างเพื่อ
-          พิจารณาขยายเวลาก่อสร้าง ตามที่คู่สัญญาทั้งสองฝ่ายตกลงร่วมกัน
+          พิจารณาขยายเวลาก่อสร้าง ตามที่คู่สัญญาทั้งสองฝ่ายตกลงร่วมกัน โดยคำนึงถึงแบบก่อสร้างที่มีการแก้ไขเพิ่มเติม
         </p>
         <p className="ind">
           ทั้งนี้หากมีการแก้ไขงานก่อสร้างโดยที่งานดังกล่าวมิได้เกิดจากการแจ้งเป็นลายลักษณ์อักษรจากผู้ว่าจ้าง แต่เกิดจาก
@@ -311,8 +348,8 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
 
         <p className="ind">
           เอกสารชุดนี้ทำขึ้นเป็นสองฉบับ มีข้อความถูกต้องตรงกัน คู่สัญญาทั้งสองฝ่ายได้อ่านและเข้าใจข้อความโดยตลอดแล้ว
-          จึงได้ลงลายมือชื่อไว้ ณ วันที่ <b>{c.signDate ? thDateBE(c.signDate) : blank}</b>
-          {' '}และวันกำหนดแล้วเสร็จ วันที่ <b>{c.dueDate ? thDateBE(c.dueDate) : blank}</b> ต่างเก็บไว้เป็นหลักฐานฝ่ายละ 1 ฉบับ
+          จึงได้ลงลายมือชื่อไว้ ณ <b>{thDateContract(c.signDate)}</b>
+          {' '}และวันกำหนดแล้วเสร็จ <b>{thDateContract(c.dueDate)}</b> ต่างเก็บไว้เป็นหลักฐานฝ่ายละ 1 ฉบับ
         </p>
         <p className="ind">
           สุดท้ายนี้ผู้ว่าจ้าง หวังเป็นอย่างยิ่งว่าผู้รับจ้างจะสามารถดำเนินการได้อย่างมีประสิทธิภาพและสำเร็จตามวัตถุประสงค์ของโครงการต่อไป
@@ -337,6 +374,7 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
             ผู้ว่าจ้างอาจประสงค์ให้ผู้รับจ้างปฏิบัติงานเพิ่มเติม เปลี่ยนแปลงหรือแก้ไขการปฏิบัติงาน ซึ่งอาจแตกต่างหรือ
             นอกเหนือไปจากรายละเอียดงานที่ระบุไว้ในเอกสารแนบท้ายสัญญา (รวมเรียกว่า “งานแก้ไข/เพิ่มเติม”) โดยผู้รับจ้าง
             จะปฏิบัติงานดังกล่าวตามคำขอร้องของผู้ว่าจ้าง ภายใต้เงื่อนไขและข้อตกลง รวมถึงค่าจ้างที่เกี่ยวข้องที่ตกลงร่วมกัน
+            เพื่อการนั้น โดยข้อตกลงเช่นว่านั้นจะต้องทำขึ้นตามแบบที่กำหนดในเรื่องแบบคำขอเปลี่ยนแปลงงานแนบท้ายสัญญานี้
           </Cl>
           <Cl n="1.1.3">
             งานที่รวมในงานเหมานี้ คุณสมบัติวัสดุ ได้แก่
@@ -439,16 +477,18 @@ export const CONTRACT_CSS = `
 .ctr .cl .cl{margin-top:6px}
 .ctr .box{border:1px solid #999;background:#fafafa;padding:8px 11px;margin:6px 0 2px;font-size:12.5px;line-height:1.6}
 .ctr .hl-red{color:#c00;font-weight:700;margin:10px 0;text-align:center}
-.ctr table.inst{margin:6px 0 4px;font-size:12.5px}
-.ctr table.inst td{vertical-align:top;padding:4px 6px;border-bottom:1px solid #e4e4e4}
+.ctr table.inst{margin:6px 0 4px;font-size:13px;line-height:1.9}
+.ctr table.inst td{vertical-align:top;padding:3px 6px}
 .ctr table.inst td.no{width:52px;white-space:nowrap}
-.ctr table.inst td.amt{width:215px;text-align:right;white-space:nowrap}
-.ctr table.inst .mark{background:#f6e83a;padding:0 4px}
+.ctr table.inst td.amt{width:250px;text-align:right;white-space:nowrap}
+.ctr table.inst tr.main td{padding-top:8px}
+.ctr table.inst .mark{background:#f6e83a;padding:0 4px;font-weight:700}
 .ctr table.inst .pct{color:#555;font-size:11.5px}
-.ctr table.inst .sub{padding-left:16px;color:#c00;display:flex;justify-content:space-between;gap:10px}
-.ctr table.inst .sub .samt{color:#111;white-space:nowrap}
-.ctr table.inst .inote{color:#555;font-size:12px}
-.ctr table.inst tr.sum td{background:#fbf3d2;border-bottom:none}
+/* งวดย่อย: เยื้องเข้าใต้ชื่องวดหลัก ตัวแดงทั้งแถวเหมือนฟอร์ม ยอดอยู่คอลัมน์ขวาเดียวกับงวดหลัก */
+.ctr table.inst tr.sub td{color:#c00;padding-top:0;padding-bottom:0}
+.ctr table.inst tr.sub td:nth-child(2){padding-left:44px}
+.ctr table.inst .inote{color:#555;font-size:11.5px;line-height:1.5;padding-top:0;padding-bottom:6px}
+.ctr table.inst tr.sum td{background:#fbf3d2;padding:6px;font-weight:700}
 .ctr .star{text-align:center;font-weight:700;margin:8px 0 12px}
 /* กันบล็อกลายเซ็นถูกผ่าครึ่งคนละหน้า เผื่อกรณีที่ย่อจนสุดเพดานแล้วยังไม่พอ */
 .ctr .ct-signs{display:grid;grid-template-columns:1fr 1fr;gap:26px 20px;margin-top:30px;text-align:center;font-size:12.5px;line-height:2;break-inside:avoid;page-break-inside:avoid}

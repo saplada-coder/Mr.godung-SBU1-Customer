@@ -74,8 +74,8 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   if (rows.length) {
     await db.insert(contractInstallments).values(rows.map((i, n) => ({
       contractId: made.id, seq: n + 1, title: i.title, percent: i.percent, amount: String(n0(i.amount)), note: i.detail,
-      // งวดที่ 1 เป็นมัดจำจ่ายก้อนเดียว ตั้งแต่งวดที่ 2 แตกครึ่ง "วัสดุเข้างาน / ติดตั้งเสร็จ" ตามฟอร์มสัญญาจริง
-      subsJson: n === 0 ? null : JSON.stringify(halfSubs(n0(i.amount))),
+      // งวดที่ 1 เป็นมัดจำจ่ายก้อนเดียว ตั้งแต่งวดที่ 2 แตกครึ่งเป็น "งวดที่ N.1 / N.2" อย่างละ 50%
+      subsJson: n === 0 ? null : JSON.stringify(halfSubs(n0(i.amount), n + 1)),
     })))
   }
   await db.insert(activityLog).values({

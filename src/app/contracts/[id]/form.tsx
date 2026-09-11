@@ -63,7 +63,7 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
     if (hasSubs && !await uiConfirm('บางงวดมีงวดย่อยอยู่แล้ว — แตกใหม่เป็น 50/50 ทับของเดิมทั้งหมด?')) return
     setF((o) => ({
       ...o,
-      installments: o.installments.map((it, i) => (i === 0 ? it : { ...it, subs: halfSubs(it.amount || 0) })),
+      installments: o.installments.map((it, i) => (i === 0 ? it : { ...it, subs: halfSubs(it.amount || 0, i + 1) })),
     }))
   }
 
@@ -179,7 +179,7 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
               <button type="button" className="btn btn-sm" onClick={splitHalves}>แตกครึ่งตั้งแต่งวดที่ 2</button>
             )}
           </div>
-          <div className="hintline">ตามฟอร์มสัญญา งวดที่ 1 เป็นมัดจำก้อนเดียว ตั้งแต่งวดที่ 2 แตกเป็น &quot;วัสดุเข้างาน / ติดตั้งเสร็จ&quot; อย่างละ 50%</div>
+          <div className="hintline">ตามฟอร์มสัญญา งวดที่ 1 เป็นมัดจำก้อนเดียว ตั้งแต่งวดที่ 2 แตกเป็นงวดย่อย N.1 / N.2 อย่างละ 50% (เช่น งวดที่ 2.1, งวดที่ 2.2)</div>
         </div>
         <div className="field full">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -189,14 +189,19 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
                   <span style={{ fontSize: 12, color: 'var(--text-dim)', whiteSpace: 'nowrap', fontWeight: 700 }}>6.1.{i + 1}</span>
                   <input value={it.title} disabled={locked} placeholder="ชื่องวด เช่น งานฐานราก"
                     onChange={(e) => setInst(i, { title: e.target.value })} style={{ flex: 1 }} />
-                  {/* % กับบาทผูกกัน: พิมพ์ % ระบบคิดบาทจากมูลค่าสัญญา · พิมพ์บาท ระบบคิด % กลับให้ */}
-                  <input type="number" value={it.percent === null ? '' : String(it.percent)} disabled={locked} placeholder="%"
-                    title="เปอร์เซ็นต์ของมูลค่าสัญญา" style={{ width: 76 }} step="0.01"
-                    onChange={(e) => {
-                      const pct = e.target.value === '' ? null : Number(e.target.value)
-                      setInst(i, { percent: pct, amount: pct == null ? it.amount : Math.round(f.contractAmount * pct / 100) })
-                    }} />
-                  <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>%</span>
+                  {/* % กับบาทผูกกัน: พิมพ์ % ระบบคิดบาทจากมูลค่าสัญญา · พิมพ์บาท ระบบคิด % กลับให้
+                      งวดที่แตกงวดย่อยแล้วไม่โชว์ % ของงวดหลัก — สัญญาอ่านเป็น 50/50 ของงวดย่อยอย่างเดียว ตัวเลขซ้อนกันสองชั้นจะสับสน */}
+                  {it.subs.length === 0 && (
+                    <>
+                      <input type="number" value={it.percent === null ? '' : String(it.percent)} disabled={locked} placeholder="%"
+                        title="เปอร์เซ็นต์ของมูลค่าสัญญา" style={{ width: 76 }} step="0.01"
+                        onChange={(e) => {
+                          const pct = e.target.value === '' ? null : Number(e.target.value)
+                          setInst(i, { percent: pct, amount: pct == null ? it.amount : Math.round(f.contractAmount * pct / 100) })
+                        }} />
+                      <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>%</span>
+                    </>
+                  )}
                   <input type="number" value={String(it.amount)} disabled={locked} style={{ width: 140 }}
                     onChange={(e) => {
                       const amt = Number(e.target.value) || 0
@@ -210,11 +215,24 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
                 {it.subs.map((sb, m) => (
                   <div key={m} style={{ display: 'flex', gap: 8, alignItems: 'center', paddingLeft: 26 }}>
                     <span style={{ fontSize: 12, color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>6.1.{i + 1}.{m + 1}</span>
-                    <input value={sb.title} disabled={locked} placeholder="เช่น วัสดุเข้างาน" style={{ flex: 1 }}
+                    <input value={sb.title} disabled={locked} placeholder={`เช่น งวดที่ ${i + 1}.${m + 1}`} style={{ flex: 1 }}
                       onChange={(e) => setInst(i, { subs: it.subs.map((x, n) => (n === m ? { ...x, title: e.target.value } : x)) })} />
+                    {/* % ของงวดหลัก — คิดจากบาทตอนแสดง ไม่เก็บแยก จะได้ไม่มีสองตัวเลขที่ขัดกัน
+                        พิมพ์ % แล้วระบบคิดบาทให้ และถ้ามี 2 งวดย่อย อีกงวดจะรับส่วนที่เหลือเอง (พิมพ์ 30 → อีกงวดเป็น 70) */}
+                    <input type="number" step="0.1" min={0} max={100} disabled={locked || !(it.amount > 0)}
+                      title="เปอร์เซ็นต์ของยอดงวดนี้" style={{ width: 70 }}
+                      value={it.amount > 0 ? String(Math.round((sb.amount || 0) / it.amount * 1000) / 10) : ''}
+                      onChange={(e) => {
+                        const pct = Math.min(100, Math.max(0, Number(e.target.value) || 0))
+                        const amt = Math.round(it.amount * pct / 100)
+                        setInst(i, { subs: it.subs.map((x, n) => n === m ? { ...x, amount: amt }
+                          : it.subs.length === 2 ? { ...x, amount: it.amount - amt } : x) })
+                      }} />
+                    <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>%</span>
                     <input type="number" value={String(sb.amount)} disabled={locked} style={{ width: 140 }}
                       onChange={(e) => setInst(i, { subs: it.subs.map((x, n) => (n === m ? { ...x, amount: Number(e.target.value) || 0 } : x)) })} />
-                    {!locked && (
+                    {/* ตั้งแต่งวดที่ 2 ชำระ 2 งวดย่อยพอดีตามฟอร์ม — ลบได้เฉพาะเมื่อมีเกิน 2 (กรณีเผลอเพิ่มไว้) */}
+                    {!locked && (i === 0 || it.subs.length > 2) && (
                       <button type="button" className="btn btn-sm" style={{ color: '#b0281c' }}
                         onClick={() => setInst(i, { subs: it.subs.filter((_, n) => n !== m) })}>ลบ</button>
                     )}
@@ -241,10 +259,15 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
                 })()}
                 <textarea value={it.note} disabled={locked} placeholder="รายละเอียดงวด (ไม่บังคับ)" rows={2}
                   onChange={(e) => setInst(i, { note: e.target.value })} />
-                {!locked && (
+                {/* งวดที่ 2 ขึ้นไปมี 2 งวดย่อยพอดี — ปุ่มเพิ่มโผล่เฉพาะตอนยังไม่ครบ 2 (เช่น เคยลบออกไว้) ส่วนงวดที่ 1 เพิ่มได้ตามเดิม */}
+                {!locked && (i === 0 || it.subs.length < 2) && (
                   <div>
                     <button type="button" className="btn btn-sm"
-                      onClick={() => setInst(i, { subs: [...it.subs, { title: '', amount: 0 }] })}>+ แตกงวดย่อย</button>
+                      onClick={() => setInst(i, i === 0
+                        ? { subs: [...it.subs, { title: '', amount: 0 }] }
+                        : { subs: halfSubs(it.amount || 0, i + 1) })}>
+                      {i === 0 ? '+ แตกงวดย่อย' : 'แตกเป็น 2 งวดย่อย 50/50'}
+                    </button>
                   </div>
                 )}
               </div>

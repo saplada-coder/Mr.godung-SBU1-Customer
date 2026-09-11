@@ -44,7 +44,8 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
         dueDate: c.dueDate ?? '',
         installments: insts.map((i) => ({
           title: i.title,
-          percent: num(i.percent),
+          // สัญญาที่ร่างก่อนมีช่อง % จะว่าง — คิดจากบาทให้ก่อน จะได้ไม่ต้องไล่กรอกเองทั้ง 9 งวด
+          percent: num(i.percent) ?? (n0(c.contractAmount) > 0 ? Math.round(n0(i.amount) / n0(c.contractAmount) * 10000) / 100 : null),
           amount: n0(i.amount),
           note: i.note ?? '',
           subs: parseSubs(i.subsJson),

@@ -197,12 +197,12 @@ export const DEFAULT_INSTALLMENTS: { title: string; percent: number; detail: str
 ]
 
 /**
- * งวดย่อยของสัญญา: แตกงวดเป็นสองครึ่ง "วัสดุเข้างาน / ติดตั้งเสร็จ" ตามฟอร์มสัญญาจริง
+ * งวดย่อยของสัญญา: แตกงวดที่ seq เป็นสองครึ่ง "งวดที่ N.1 / งวดที่ N.2" อย่างละ 50%
  * ใช้กับงวดที่ 2 เป็นต้นไป (งวดที่ 1 เป็นมัดจำก้อนเดียว) · เศษที่หารไม่ลงตัวไปอยู่ครึ่งหลัง จะได้รวมกลับเท่ายอดเดิม
  */
-export const halfSubs = (amount: number) => {
+export const halfSubs = (amount: number, seq: number) => {
   const first = Math.floor(amount / 2)
-  return [{ title: 'วัสดุเข้างาน', amount: first }, { title: 'ติดตั้งเสร็จ', amount: amount - first }]
+  return [{ title: `งวดที่ ${seq}.1`, amount: first }, { title: `งวดที่ ${seq}.2`, amount: amount - first }]
 }
 
 export const DEFAULT_WARRANTY ='1. รับประกันโครงสร้างอาคาร 2 ปี\n2. รับประกันส่วนงานตกแต่งอื่นๆ 1 ปี\n3. รับประกันเมทัลชีท ผุเป็นรู จากบลูสโคป 10 ปี\n* เงื่อนไขเป็นตามที่บริษัทกำหนด'
