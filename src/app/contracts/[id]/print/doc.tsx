@@ -115,6 +115,7 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
         <div>( {signer || '……………………………'} )</div>
         <div>{blank}</div>
       </div>
+      {/* พยานซ้ายเป็นฝั่งผู้ว่าจ้าง เว้นให้กรอกมือ · พยานขวาเป็นฝั่งบริษัท ชื่อคงที่จากตั้งค่าบริษัท */}
       <div>
         <div>ลงชื่อ…………………………………..พยาน</div>
         <div>( ………………………………… )</div>
@@ -122,7 +123,7 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
       </div>
       <div>
         <div>ลงชื่อ…………………………………..พยาน</div>
-        <div>( ………………………….. )</div>
+        <div>( {s.witnessName || '…………………………..'} )</div>
         <div>{blank}</div>
       </div>
     </div>

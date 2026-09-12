@@ -234,6 +234,8 @@ export const companySettings = pgTable('company_settings', {
   taxId: varchar('tax_id', { length: 20 }),
   /** ผู้มีอำนาจลงนามแทนบริษัท เช่น นายวิเจน แก้วมณี — ขึ้นในสัญญาทุกฉบับ ตั้งครั้งเดียว */
   signerName: varchar('signer_name', { length: 120 }),
+  /** พยานฝ่ายบริษัทที่ลงนามในสัญญาทุกฉบับ — ช่องพยานฝั่งผู้รับจ้าง */
+  witnessName: varchar('witness_name', { length: 120 }),
   logoUrl: text('logo_url'),
   /** บัญชีรับเงิน 2 แบบ (ข้อความหลายบรรทัด: เลขบัญชี/ชื่อ/ธนาคาร) */
   bankPersonal: text('bank_personal'),

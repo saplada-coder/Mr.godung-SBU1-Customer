@@ -17,7 +17,9 @@ export async function getSettings() {
     website: row?.website ?? '',
     email: row?.email ?? '',
     taxId: row?.taxId ?? '',
-    signerName: row?.signerName ?? '',
+    // ผู้ลงนามและพยานฝ่ายบริษัทเป็นคนเดิมทุกสัญญา — ค่าตั้งต้นตามฟอร์มจริง แก้ได้ในตั้งค่าบริษัท
+    signerName: row?.signerName ?? 'นายวิเจน แก้วมณี',
+    witnessName: row?.witnessName ?? 'นางสาวซัลวาณี ลีวาเมาะ',
     logoUrl: row?.logoUrl ?? null,
     bankPersonal: row?.bankPersonal ?? '',
     bankCompany: row?.bankCompany ?? '',
