@@ -6,7 +6,6 @@ import { n0, num } from '@/lib/biz'
 import { bahtText, thDateBE, thDateContract } from '@/lib/format'
 import { halfSubs } from '@/lib/constants'
 import { defaultProjectName, defaultSite, defaultEmployerSigner, addDays } from '@/lib/contract-defaults'
-import FitPages from '../../../fit-pages'
 
 /**
  * สัญญาว่าจ้างรับเหมาก่อสร้าง — จัดหน้าตามฟอร์มสัญญาจริงของบริษัท
@@ -132,11 +131,10 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
   return (
     <div className="ctr">
       <style>{CONTRACT_CSS}</style>
-      <FitPages />
       {toolbar}
 
       {/* ---------- หน้าปก ---------- */}
-      <div className="page cover"><div className="pg-fit"><div className="pg-in">
+      <div className="page cover">
         <div className="orig">ต้นฉบับ</div>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {s.logoUrl && <img className="logo" src={s.logoUrl} alt="" />}
@@ -153,11 +151,11 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
           {/* ที่ตั้งหน้างาน ตำบล/อำเภอ/จังหวัด — ขึ้นเป็นคำเตือนถ้ายังว่าง จะได้เห็นตั้งแต่ก่อนพิมพ์ */}
           <div className="b big">{c.siteAddress || '(ยังไม่ได้ระบุที่ตั้งโครงการ)'}</div>
         </div>
-      </div></div></div>
+      </div>
 
       {/* ---------- ข้อ 1-3 ---------- */}
-      <div className="page"><div className="pg-fit"><div className="pg-in">
-        <div className="orig">ต้นฉบับ</div>
+      {/* เนื้อหาสัญญาไหลต่อเนื่อง ให้เบราว์เซอร์ตัดหน้าเองตามจริง — ไม่ตรึงเป็นหน้าละข้อ เพราะข้อยาวจะถูกดันไปแผ่นใหม่ทั้งก้อนแล้วเหลือช่องว่างใหญ่ */}
+      <div className="page flow">
         <h3 className="doc-h">{c.projectName || 'โครงการก่อสร้าง'}</h3>
 
         <div className="cl-h">1. ขอบเขตของงาน</div>
@@ -218,11 +216,8 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
           ทั้งนี้ผู้รับจ้างจะต้องทำการชี้แจงกับทางผู้ว่าจ้างก่อนการดำเนินการตลอดเป็นระยะ
         </Cl>
         <Cl n="3.2">ผู้รับจ้างจะต้องมีหน้าที่คอยประสานงานและควบคุมงานก่อสร้างประจำอยู่ที่สถานที่ก่อสร้างเวลางานที่จ้าง</Cl>
-      </div></div></div>
 
       {/* ---------- ข้อ 4-5 ---------- */}
-      <div className="page"><div className="pg-fit"><div className="pg-in">
-        <div className="orig">ต้นฉบับ</div>
         <div className="cl-h">4. เขตก่อสร้างและการสำรวจสภาพพื้นที่ข้างเคียง</div>
         <Cl n="4.1">
           ผู้รับจ้างมีหน้าที่ดูแลรักษารั้วเดิมของผู้ว่าจ้าง ยกเว้นได้รับการอนุมัติจากผู้ว่าจ้างในการกำหนดช่องเปิดสำหรับ
@@ -247,11 +242,8 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
           โดยผู้รับจ้างเป็นผู้รับผิดชอบค่าใช้จ่ายเอง
         </Cl>
         <Cl n="5.4">หากผู้รับจ้างมีการใช้แรงงานที่เป็นบุคคลต่างด้าว ทางผู้รับจ้างจะต้องเป็นผู้ดำเนินการขออนุญาตขึ้นทะเบียนต่อกรมแรงงาน</Cl>
-      </div></div></div>
 
       {/* ---------- ข้อ 6 มูลค่าสัญญาและงวดงาน ---------- */}
-      <div className="page"><div className="pg-fit"><div className="pg-in">
-        <div className="orig">ต้นฉบับ</div>
         <div className="cl-h">6. มูลค่าสัญญา, งวดงานและการเบิกจ่ายงวดงาน</div>
         <Cl n="6.1">มูลค่าค่าก่อสร้างทั้งหมด (Lump Sum Cost) <b>{fmt(amount)}</b> บาท</Cl>
         <div className="hl-red">
@@ -320,11 +312,8 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
           ผู้รับจ้างจะต้องเป็นผู้รับผิดชอบทั้งสิ้น โดยจะเรียกร้องใด ๆ จากผู้ว่าจ้างไม่ได้
           <span className="red"> เว้นแต่เหตุที่ได้รับความเสียหายนั้นเกิดขึ้นโดยความประมาทของบุคคลนั้น ๆ เอง</span>
         </p>
-      </div></div></div>
 
       {/* ---------- ข้อ 7-11 + ลงนาม ---------- */}
-      <div className="page"><div className="pg-fit"><div className="pg-in">
-        <div className="orig">ต้นฉบับ</div>
         <div className="cl-h">7. อัตราค่าปรับ</div>
         <p className="ind">
           หากผู้รับจ้างทำงานทั้งหมดไม่แล้วเสร็จตามข้อ 2.1 เหตุเกิดจากความผิดของผู้รับจ้างเอง ผู้ว่าจ้างกำหนดค่าปรับ
@@ -372,11 +361,10 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
           สุดท้ายนี้ผู้ว่าจ้าง หวังเป็นอย่างยิ่งว่าผู้รับจ้างจะสามารถดำเนินการได้อย่างมีประสิทธิภาพและสำเร็จตามวัตถุประสงค์ของโครงการต่อไป
         </p>
         {sign}
-      </div></div></div>
+      </div>
 
       {/* ---------- เงื่อนไขของสัญญา ข้อ 1-3 ---------- */}
-      <div className="page"><div className="pg-fit"><div className="pg-in">
-        <div className="orig">ต้นฉบับ</div>
+      <div className="page flow">
         <h3 className="doc-h">เงื่อนไขของสัญญา</h3>
 
         <div className="cl-h">1. ข้อความทั่วไป</div>
@@ -429,11 +417,8 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
           ผู้รับจ้างจะต้องรับผิดชอบในบรรดาสิทธิเรียกร้องค่าเสียหาย ค่าใช้จ่าย ตลอดถึงการเรียกร้องอื่นโดยบุคคลที่สาม
           อันเกิดจากความผิดพลาด การละเมิด หรือการละเว้นไม่กระทำการอันควรของผู้รับจ้าง หรือของลูกจ้าง/พนักงาน/ผู้รับเหมาช่วงของผู้รับจ้าง
         </Cl>
-      </div></div></div>
 
       {/* ---------- เงื่อนไขของสัญญา ข้อ 4-7 + ลงนาม ---------- */}
-      <div className="page"><div className="pg-fit"><div className="pg-in">
-        <div className="orig">ต้นฉบับ</div>
         <div className="cl-h">4. ความรับผิดชอบของผู้ว่าจ้าง</div>
         <Cl n="4.1">ผู้ว่าจ้างจะส่งมอบพื้นที่เพื่อผู้รับจ้างสามารถเริ่มปฏิบัติงานได้ตามเงื่อนไขแห่งสัญญานี้ภายใน <b>{startWithin}</b> วัน</Cl>
         <Cl n="4.2">ในกรณีที่ผู้รับจ้างร้องขอ ผู้ว่าจ้างจะให้ความช่วยเหลืออำนวยความสะดวกตามสมควรเพื่อให้การปฏิบัติงานของผู้รับจ้างตามสัญญานี้ลุล่วงไปด้วยดี</Cl>
@@ -465,7 +450,7 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
           จึงได้ลงลายมือชื่อพร้อมประทับตราไว้เป็นสำคัญต่อหน้าพยาน และคู่สัญญาต่างยึดถือไว้ฝ่ายละฉบับ
         </p>
         {sign}
-      </div></div></div>
+      </div>
     </div>
   )
 }
@@ -477,6 +462,8 @@ export const CONTRACT_CSS = `
 .ctr tbody td{border-bottom:none;padding:0}
 .ctr .page{background:#fff;width:210mm;min-height:290mm;margin:0 auto 18px;padding:16mm 18mm;box-shadow:0 2px 14px rgba(0,0,0,.35);font-size:13px;line-height:1.75;position:relative}
 .ctr .orig{position:absolute;top:8mm;right:18mm;font-weight:700;font-size:12px}
+/* หน้าที่ไหลต่อเนื่อง: บนจอเป็นแผ่นยาวแผ่นเดียว ตอนพิมพ์เบราว์เซอร์ตัดเป็นหลายแผ่นเอง */
+.ctr .page.flow{min-height:0}
 .ctr .b{font-weight:700}.ctr .r{text-align:right}.ctr .red{color:#c00}.ctr .pre{white-space:pre-wrap}
 /* หน้าปก: สัดส่วนตามฟอร์มจริง — โลโก้บน ชื่อสัญญาใหญ่ ที่อยู่บริษัทตัวหนา แล้วเว้นลงมาวางชื่อโครงการ/ผู้ว่าจ้าง/ที่ตั้ง ที่ราวสามส่วนสี่ของหน้า */
 .ctr .cover{text-align:center;padding-top:22mm}
@@ -487,11 +474,13 @@ export const CONTRACT_CSS = `
 .ctr .cv-project{margin-top:42mm;display:flex;flex-direction:column;gap:16px}
 .ctr .cv-project .big{font-size:23px}
 .ctr .doc-h{text-align:center;font-size:19px;font-weight:800;margin:0 0 16px}
-.ctr .cl-h{font-weight:700;font-size:14px;margin:16px 0 6px}
+.ctr .cl-h{font-weight:700;font-size:14px;margin:16px 0 6px;break-after:avoid;page-break-after:avoid}
 .ctr p.ind{margin:0 0 10px;text-indent:2em;text-align:justify}
-.ctr .cl{display:flex;gap:.55em;margin-bottom:8px;align-items:flex-start}
-.ctr .cl-n{flex:0 0 auto;min-width:2.7em;font-weight:600}
-.ctr .cl-b{flex:1;min-width:0;text-align:justify}
+/* ข้อสัญญาเป็นบล็อกธรรมดา เว้นซ้ายให้เลขข้อลอยอยู่ — ห้ามใช้ flex เพราะเบราว์เซอร์ตัดหน้ากลาง flex ไม่ได้
+   ข้อยาว (เช่น 1.1 ที่ซ้อนสเปคทั้งกล่อง) จะถูกดันไปแผ่นใหม่ทั้งก้อน เหลือช่องว่างเกือบทั้งหน้า */
+.ctr .cl{position:relative;padding-left:2.9em;margin-bottom:8px;text-align:justify}
+.ctr .cl-n{position:absolute;left:0;top:0;font-weight:600}
+.ctr .cl-b{display:block;min-width:0}
 .ctr .cl .cl{margin-top:6px}
 .ctr .box{border:1px solid #999;background:#fafafa;padding:8px 11px;margin:6px 0 2px;font-size:12.5px;line-height:1.6}
 .ctr .hl-red{color:#c00;font-weight:700;margin:10px 0;text-align:center}
@@ -527,6 +516,10 @@ export const CONTRACT_CSS = `
   .ctr{background:#fff;padding:0}
   .ctr .page{box-shadow:none;margin:0;width:auto;min-height:0;page-break-after:always}
   .ctr .page:last-child{page-break-after:auto}
+  /* "ต้นฉบับ" ให้ขึ้นทุกแผ่นเหมือนฟอร์ม — position:fixed ตอนพิมพ์จะถูกวาดซ้ำทุกหน้า */
+  .ctr .orig{position:fixed;top:8mm;right:18mm}
+  .ctr table.inst tr{break-inside:avoid;page-break-inside:avoid}
+  .ctr .box{break-inside:auto}
   .ctr .ptoolbar{display:none}
 }
 @page{size:A4;margin:0}
