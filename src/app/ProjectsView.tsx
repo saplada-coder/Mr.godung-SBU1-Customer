@@ -1184,11 +1184,11 @@ export function BillingModal({ projectId, installments, preset, onClose, onSaved
   const [images, setImages] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
 
-  // ดึงข้อมูลลูกค้าตั้งต้นจากใบเสนอราคาของงาน (fallback CRM)
+  // ดึงข้อมูลลูกค้าตั้งต้นจากใบเสนอราคาของงาน (fallback CRM) และติ๊ก VAT ให้ตามที่ตกลงไว้ในใบเสนอราคา
   useEffect(() => {
     fetch(`/api/projects/${projectId}/billing`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (j?.custInfo) setCust(j.custInfo) })
+      .then((j) => { if (j?.custInfo) setCust(j.custInfo); if (j?.vatPct > 0) setVat(true) })
       .catch(() => {})
   }, [projectId])
   // เลือกใบกำกับภาษี → เปิด VAT ให้อัตโนมัติ
@@ -1281,13 +1281,16 @@ export function BillingModal({ projectId, installments, preset, onClose, onSaved
               <div className="field"><label>อ้างอิง (เลขที่เช็ค/สลิป)</label><input value={f.payRef} onChange={(e) => setF((o) => ({ ...o, payRef: e.target.value }))} /></div>
             </>
           )}
-          <div className="field full" style={{ flexDirection: 'row', gap: 18, alignItems: 'center' }}>
-            <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', cursor: kind === 'taxReceipt' ? 'default' : 'pointer', fontSize: 13 }}>
+          <div className="field full" style={{ flexDirection: 'row', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', cursor: kind === 'taxReceipt' ? 'default' : 'pointer', fontSize: 13, fontWeight: 700 }}>
               <input type="checkbox" checked={vat} disabled={kind === 'taxReceipt'} onChange={(e) => setVat(e.target.checked)} />VAT 7%
+              {vat && <span style={{ fontWeight: 500, color: 'var(--text-dim)' }}>· +฿{commas(vatAmount)}</span>}
             </label>
             <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
               <input type="checkbox" checked={wht} onChange={(e) => setWht(e.target.checked)} />หัก ณ ที่จ่าย 3%
             </label>
+            {/* ใบวางบิลที่ไม่มี VAT เคยหลุดออกไปเพราะช่องติ๊กมองข้ามง่าย — เตือนตัวแดงจนกว่าจะติ๊กหรือตั้งใจไม่คิด VAT */}
+            {!vat && kind !== 'taxReceipt' && <span className="err">ยังไม่คิด VAT 7% — ถ้าใบนี้ต้องมี VAT ให้ติ๊กก่อนออก</span>}
           </div>
           <div className="field full"><label>หมายเหตุ</label><input value={f.note} onChange={(e) => setF((o) => ({ ...o, note: e.target.value }))} /></div>
           <div className="field full"><label>รูปแนบ (สลิปโอน / หลักฐาน — สูงสุด 10 รูป)</label>

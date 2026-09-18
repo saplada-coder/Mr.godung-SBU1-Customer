@@ -151,5 +151,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       phone: remembered('custPhone') || q?.custPhone || cust?.phone || '',
       taxId: remembered('custTaxId') || q?.custTaxId || '',
     },
+    // VAT ตามที่ตกลงในใบเสนอราคา/งาน — ฟอร์มใช้ติ๊กช่อง VAT ให้ล่วงหน้า จะได้ไม่มีใบไหนออกไปโดยลืม VAT
+    vatPct: num(p.vatPct) ?? num(q?.vatPct) ?? 0,
   })
 }
