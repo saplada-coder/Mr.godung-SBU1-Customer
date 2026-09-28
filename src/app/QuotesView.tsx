@@ -64,6 +64,15 @@ export default function QuotesView({ me, records, limitedData, openQuoteId, onOp
     if (r.ok) { showToast(`ลบ ${x.code} เข้าถังขยะแล้ว — กู้คืนได้ 30 วัน`); await load(); onChanged() }
     else showToast((await r.json()).error || 'ลบไม่สำเร็จ')
   }
+  /** ทำสำเนา — ได้ใบร่างใหม่เนื้อหาเหมือนเดิม ใบต้นทางไม่ถูกแตะ แล้วเปิดใบใหม่ให้แก้ต่อทันที */
+  const duplicate = async (x: Quote) => {
+    if (!await uiConfirm(`ทำสำเนาใบ ${x.code}?\n\nได้ใบร่างใหม่ เลขที่ใหม่ รายการ สเปค และงวดงานเหมือนเดิมทุกอย่าง\nใบ ${x.code} ไม่ถูกแก้ไข`)) return
+    const r = await fetch(`/api/quotes/${x.id}/duplicate`, { method: 'POST' })
+    const j = await r.json().catch(() => ({}))
+    if (!r.ok) { showToast(j.error || 'ทำสำเนาไม่สำเร็จ'); return }
+    showToast(`ทำสำเนาเป็น ${j.code} แล้ว`)
+    await load(); onChanged(); setOpenId(j.id)
+  }
   const restore = async (x: Quote) => {
     const r = await fetch(`/api/quotes/${x.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'restore' }) })
     if (r.ok) { showToast(`กู้คืน ${x.code} แล้ว`); await load(); onChanged() }
@@ -138,6 +147,7 @@ export default function QuotesView({ me, records, limitedData, openQuoteId, onOp
                       <>
                         <button className="row-btn" onClick={() => setOpenId(x.id)}>เปิด</button>
                         <button className="row-btn" style={{ marginLeft: 5 }} onClick={() => window.open(`/quotes/${x.id}/print`, '_blank')}>พิมพ์</button>
+                        {editable && <button className="row-btn" style={{ marginLeft: 5 }} onClick={() => duplicate(x)}>สำเนา</button>}
                         {editable && (admin || x.createdBy === me.id) && x.projectId == null && (
                           <button className="row-btn" style={{ marginLeft: 5, color: '#b0281c' }} onClick={() => remove(x)}>ลบ</button>
                         )}
@@ -604,7 +614,7 @@ function histText(h: HistItem): string {
     'quote-create': 'สร้างใบเสนอราคา', 'quote-edit': 'แก้ไขเนื้อหา', 'quote-submit': 'ส่งขออนุมัติ',
     'quote-approve': 'อนุมัติภายใน ✓', 'quote-reject': 'ตีกลับ', 'quote-send': 'ส่งลูกค้า',
     'quote-accept': 'ลูกค้าตกลง ✓', 'quote-revise': 'สร้าง Revision', 'quote-cancel': 'ยกเลิกใบ', 'project-open': 'เปิดงานก่อสร้าง',
-    'quote-delete': 'ลบเข้าถังขยะ 🗑', 'quote-restore': 'กู้คืนจากถังขยะ ↩',
+    'quote-delete': 'ลบเข้าถังขยะ 🗑', 'quote-restore': 'กู้คืนจากถังขยะ ↩', 'quote-duplicate': 'ทำสำเนา 📄',
   }
   const base = map[h.kind] || h.kind
   if (h.kind === 'quote-reject') return `${base}: ${h.newValue || ''}`
