@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { CONTRACT_STATUSES, contractMeta, contractKindMeta, halfSubs, isAdminUp, type Role } from '@/lib/constants'
 import { bahtText } from '@/lib/format'
 import { siteComplete } from '@/lib/contract-defaults'
-import { uiConfirm } from '../../biz-shared'
+import { pickFile, uiConfirm, type PickedFile } from '../../biz-shared'
 
 export type SubRow = { title: string; amount: number }
 type Inst = { title: string; percent: number | null; amount: number; note: string; subs: SubRow[] }
@@ -17,10 +17,12 @@ export type ContractInit = {
   penaltyPerDay: number; workHours: string; warrantyYears: number
   buildingSize: string; buildingSqm: number
   scopeIncluded: string; scopeExcluded: string; warrantyText: string; note: string
+  payTo: string
   signDate: string; dueDate: string
   installments: Inst[]
 }
-type Ctx = { quoteCode: string; quoteId: number; employer: string; employerAddr: string; employerTax: string }
+type Ctx = { quoteCode: string; quoteId: number; employer: string; employerAddr: string; employerTax: string; bankDefault: string }
+type CFile = { id: number; name: string; mime: string; url: string; note: string }
 type NumKey = 'buildingSqm' | 'buildDays' | 'extendDays' | 'startWithinDays' | 'payWithinDays' | 'penaltyPerDay' | 'warrantyYears' | 'designRevisions'
 
 const money = (n: number) => Math.round(n).toLocaleString('en-US')
@@ -34,6 +36,35 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
   /** สัญญาออกแบบ: มูลค่าสัญญาคือค่าออกแบบที่คิดจากมูลค่าโครงการ และไม่มีเรื่องวัสดุ/เวลาทำงาน/การรับประกันงานก่อสร้าง */
   const design = f.kind === 'ออกแบบ'
   const kindMeta = contractKindMeta(f.kind)
+
+  /* เอกสารแนบโหลดแยกจากตัวฟอร์ม — data URL ของรูป/PDF ใหญ่เกินกว่าจะฝังมากับหน้า */
+  const [files, setFiles] = useState<CFile[] | null>(null)
+  const loadFiles = useCallback(async () => {
+    const r = await fetch(`/api/contracts/${init.id}/files`)
+    const d = await r.json().catch(() => ({}))
+    setFiles(r.ok ? d.files : [])
+  }, [init.id])
+  useEffect(() => { loadFiles() }, [loadFiles])
+
+  const addFile = () => pickFile(async (pf: PickedFile) => {
+    setBusy(true); setMsg(null)
+    const r = await fetch(`/api/contracts/${f.id}/files`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pf),
+    })
+    const d = await r.json().catch(() => ({}))
+    setBusy(false)
+    if (!r.ok) { setMsg({ t: d.error || 'แนบไฟล์ไม่สำเร็จ', err: true }); return }
+    setMsg({ t: 'แนบไฟล์แล้ว' }); loadFiles()
+  }, (t) => setMsg({ t, err: true }))
+
+  const delFile = async (file: CFile) => {
+    if (!await uiConfirm(`ลบเอกสารแนบ "${file.name}" ออกจากสัญญา?`)) return
+    const r = await fetch(`/api/contracts/${f.id}/files`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileId: file.id }),
+    })
+    if (r.ok) { setMsg({ t: 'ลบเอกสารแนบแล้ว' }); loadFiles() }
+    else setMsg({ t: (await r.json().catch(() => ({}))).error || 'ลบไม่สำเร็จ', err: true })
+  }
 
   const set = <K extends keyof ContractInit>(k: K, v: ContractInit[K]) => setF((o) => ({ ...o, [k]: v }))
   const setInst = (i: number, patch: Partial<Inst>) =>
@@ -373,6 +404,53 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
         <div className="field full">
           <label>หมายเหตุท้ายสัญญา</label>
           <textarea rows={3} value={f.note} disabled={locked} onChange={(e) => set('note', e.target.value)} />
+        </div>
+
+        <div className="fs"><div className="fs-t">ช่องทางการชำระเงิน (พิมพ์ท้ายสัญญา)</div></div>
+        <div className="field full">
+          <label>เลขที่บัญชี / ชื่อบัญชี / ธนาคาร</label>
+          <textarea rows={4} value={f.payTo} disabled={locked}
+            placeholder={ctx.bankDefault || 'เลขที่บัญชี : …\nชื่อบัญชี : …\nธนาคาร : …'}
+            onChange={(e) => set('payTo', e.target.value)} />
+          <div className="hintline">
+            {ctx.bankDefault
+              ? 'เว้นว่างไว้จะใช้บัญชีจาก "ตั้งค่าบริษัท" ตามที่ขึ้นเป็นตัวจาง (เลือกตาม VAT ของสัญญาฉบับนี้) — พิมพ์ทับได้ถ้าฉบับนี้ใช้บัญชีอื่น'
+              : 'ยังไม่ได้ตั้งบัญชีรับเงินที่ "ตั้งค่าบริษัท" — พิมพ์ที่นี่ หรือไปตั้งครั้งเดียวให้ใช้ได้ทุกฉบับ'}
+          </div>
+        </div>
+
+        <div className="fs">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <div className="fs-t">เอกสารแนบท้ายสัญญา</div>
+            {!locked && (files?.length ?? 0) < 20 && (
+              <button type="button" className="btn btn-sm" disabled={busy} onClick={addFile}>📎 แนบรูป / PDF</button>
+            )}
+          </div>
+          <div className="hintline">เช่น โฉนดที่ดิน แปลนร่าง สำเนาบัตรประชาชน — รูปจะพิมพ์ออกเป็นหน้าแนบท้ายสัญญา ส่วน PDF พิมพ์เป็นรายชื่อเอกสารและกดเปิดได้จากที่นี่ (สูงสุด 20 ไฟล์ ไฟล์ละราว 1.5 MB)</div>
+        </div>
+        <div className="field full">
+          {files == null ? (
+            <div className="hintline">กำลังโหลดเอกสารแนบ…</div>
+          ) : files.length === 0 ? (
+            <div className="hintline">ยังไม่มีเอกสารแนบ</div>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+              {files.map((file) => (
+                <div key={file.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 8, width: 160, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <a href={file.url} target="_blank" rel="noreferrer" download={file.name} style={{ display: 'block' }}>
+                    {file.mime.startsWith('image/')
+                      // eslint-disable-next-line @next/next/no-img-element
+                      ? <img src={file.url} alt={file.name} style={{ width: '100%', height: 96, objectFit: 'cover', borderRadius: 7, display: 'block' }} />
+                      : <div style={{ height: 96, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-soft,#f2f2f2)', borderRadius: 7, fontSize: 30 }}>📄</div>}
+                  </a>
+                  <div style={{ fontSize: 11.5, lineHeight: 1.4, wordBreak: 'break-word' }}>{file.name}</div>
+                  {!locked && (
+                    <button type="button" className="btn btn-sm" style={{ color: '#b0281c' }} onClick={() => delFile(file)}>ลบ</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="fs"><div className="fs-t">สถานะ</div></div>

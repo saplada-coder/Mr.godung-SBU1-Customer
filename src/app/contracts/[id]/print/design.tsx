@@ -1,6 +1,6 @@
 import { n0, num } from '@/lib/biz'
 import { bahtText, thDateBE, thDateContract } from '@/lib/format'
-import { fmt, int, subsOf, Cl, SignBlock, CONTRACT_CSS } from './parts'
+import { fmt, int, subsOf, Cl, SignBlock, PayBox, AttachmentPages, CONTRACT_CSS } from './parts'
 import type { ContractDocData } from './doc'
 
 /**
@@ -9,7 +9,7 @@ import type { ContractDocData } from './doc'
  * ตัวเลขและรายการแบบมาจากตารางสัญญา แก้ได้ที่หน้าร่างสัญญา ส่วนถ้อยคำข้อสัญญาเป็นแม่แบบคงที่
  */
 export default function DesignContractDoc({ data, toolbar }: { data: ContractDocData; toolbar?: React.ReactNode }) {
-  const { c, insts, q, cust, settings: s } = data
+  const { c, insts, files, q, cust, settings: s } = data
 
   const employer = q?.custName || cust?.name || cust?.chname || ''
   const employerAddr = q?.custAddress || cust?.province || ''
@@ -217,9 +217,12 @@ export default function DesignContractDoc({ data, toolbar }: { data: ContractDoc
           จึงได้ลงลายมือชื่อไว้ ณ <b>{thDateContract(c.signDate)}</b>
           {' '}และวันกำหนดส่งมอบแบบ <b>{thDateContract(c.dueDate)}</b> ต่างเก็บไว้เป็นหลักฐานฝ่ายละ 1 ฉบับ
         </p>
+        <PayBox payTo={c.payTo} vat={vat} bankCompany={s.bankCompany} bankPersonal={s.bankPersonal} />
         <SignBlock employer={employer} employerSigner={c.employerSigner || ''} company={s.name}
           signer={signer} witness={s.witnessName || ''} />
       </div>
+
+      <AttachmentPages files={files} />
     </div>
   )
 }

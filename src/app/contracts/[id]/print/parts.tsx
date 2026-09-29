@@ -51,6 +51,57 @@ export function SignBlock({ employer, employerSigner, company, signer, witness }
   )
 }
 
+export type ContractFile = { id: number; name: string; mime: string; url: string; note: string | null }
+
+/**
+ * ช่องทางการชำระเงินท้ายสัญญา — ข้อความเฉพาะฉบับถ้ากรอกไว้ ไม่งั้นใช้บัญชีจากตั้งค่าบริษัท
+ * ฉบับที่มี VAT ใช้บัญชีบริษัท (ออกใบกำกับได้) ฉบับที่ไม่มีใช้บัญชีบุคคล
+ */
+export function PayBox({ payTo, vat, bankCompany, bankPersonal }: {
+  payTo: string | null; vat: number; bankCompany: string; bankPersonal: string
+}) {
+  const fallback = vat ? bankCompany || bankPersonal : bankPersonal || bankCompany
+  const text = (payTo || '').trim() || fallback
+  if (!text) return null
+  return (
+    <div className="paybox">
+      <div className="pay-t">ช่องทางการชำระเงิน</div>
+      <div className="pre">{text}</div>
+      <div className="pay-n">ผู้ว่าจ้างโอนเงินตามงวดเข้าบัญชีข้างต้น และส่งหลักฐานการโอนให้ผู้รับจ้างทุกครั้ง</div>
+    </div>
+  )
+}
+
+/**
+ * เอกสารแนบท้ายสัญญา — รูปพิมพ์เต็มหน้าเรียงต่อกัน ส่วน PDF ลงเป็นรายชื่อ (ฝังในหน้าพิมพ์ไม่ได้ ส่งแยกเป็นไฟล์)
+ * ไม่มีไฟล์แนบก็ไม่ขึ้นหน้านี้เลย
+ */
+export function AttachmentPages({ files }: { files: ContractFile[] }) {
+  if (!files.length) return null
+  const images = files.filter((f) => f.mime.startsWith('image/'))
+  const docs = files.filter((f) => !f.mime.startsWith('image/'))
+  return (
+    <div className="page flow">
+      <h3 className="doc-h">เอกสารแนบท้ายสัญญา</h3>
+      <ol className="att-list">
+        {files.map((f) => (
+          <li key={f.id}>{f.name}{f.note ? ` — ${f.note}` : ''}{f.mime.startsWith('image/') ? '' : ' (ส่งเป็นไฟล์แยก)'}</li>
+        ))}
+      </ol>
+      {docs.length > 0 && images.length === 0 && (
+        <p className="ind">เอกสารข้างต้นถือเป็นส่วนหนึ่งของสัญญาฉบับนี้</p>
+      )}
+      {images.map((f) => (
+        <figure className="att" key={f.id}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={f.url} alt={f.name} />
+          <figcaption>{f.name}{f.note ? ` — ${f.note}` : ''}</figcaption>
+        </figure>
+      ))}
+    </div>
+  )
+}
+
 export const CONTRACT_CSS = `
 .ctr{background:#777;min-height:100vh;padding:20px 0;font-family:var(--font);color:#111}
 .ctr table{min-width:0;width:100%;border-collapse:collapse}
@@ -93,6 +144,15 @@ export const CONTRACT_CSS = `
 .ctr table.inst .inote{color:#555;font-size:11.5px;line-height:1.5;padding-top:0;padding-bottom:6px}
 .ctr table.inst tr.sum td{background:#fbf3d2;padding:6px;font-weight:700}
 .ctr .star{text-align:center;font-weight:700;margin:8px 0 12px}
+/* ช่องทางชำระเงินท้ายสัญญา — กรอบเข้มให้เห็นชัด ไม่ให้ถูกตัดคนละหน้ากับลายเซ็น */
+.ctr .paybox{border:1.5px solid #111;padding:9px 13px;margin:14px 0 4px;font-size:12.5px;line-height:1.7;break-inside:avoid;page-break-inside:avoid}
+.ctr .paybox .pay-t{font-weight:700;font-size:13.5px;margin-bottom:3px}
+.ctr .paybox .pay-n{color:#555;font-size:11.5px;margin-top:5px}
+/* หน้าแนบท้าย: รูปหนึ่งใบต่อหนึ่งบล็อก สูงไม่เกินราวครึ่งหน้ากระดาษเพื่อให้คำบรรยายอยู่หน้าเดียวกัน */
+.ctr .att-list{margin:0 0 14px;padding-left:1.5em;line-height:1.9}
+.ctr figure.att{margin:0 0 14px;text-align:center;break-inside:avoid;page-break-inside:avoid}
+.ctr figure.att img{max-width:100%;max-height:150mm;object-fit:contain;border:1px solid #ccc}
+.ctr figure.att figcaption{font-size:11.5px;color:#444;margin-top:5px}
 /* กันบล็อกลายเซ็นถูกผ่าครึ่งคนละหน้า เผื่อกรณีที่ย่อจนสุดเพดานแล้วยังไม่พอ */
 .ctr .ct-signs{display:grid;grid-template-columns:1fr 1fr;gap:26px 20px;margin-top:30px;text-align:center;font-size:12.5px;line-height:2;break-inside:avoid;page-break-inside:avoid}
 /* กันช่องลายเซ็นแต่ละช่องถูกผ่าเองด้วย — เบราว์เซอร์บางตัวไม่สนใจ break-inside ที่ตัว grid แต่สนใจที่ลูก */

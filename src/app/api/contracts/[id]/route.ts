@@ -62,6 +62,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if ('scopeExcluded' in b) p.scopeExcluded = str(b.scopeExcluded, 20000)
   if ('warrantyText' in b) p.warrantyText = str(b.warrantyText, 20000)
   if ('note' in b) p.note = str(b.note, 20000)
+  if ('payTo' in b) p.payTo = str(b.payTo, 2000)
   if ('signDate' in b) p.signDate = dateOk(b.signDate)
   if ('dueDate' in b) p.dueDate = dateOk(b.dueDate)
   for (const k of ['buildDays', 'extendDays', 'startWithinDays', 'payWithinDays', 'warrantyYears', 'designRevisions'] as const) {

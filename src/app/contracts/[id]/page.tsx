@@ -12,7 +12,9 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
   if (!me || !me.active) redirect('/sign-in')
   const data = await loadContract(Number((await params).id))
   if (!data) notFound()
-  const { c, insts, q, cust } = data
+  const { c, insts, q, cust, settings } = data
+  // บัญชีรับเงินที่จะใช้ถ้าไม่พิมพ์ทับ — ฉบับที่มี VAT ใช้บัญชีบริษัท ฉบับที่ไม่มีใช้บัญชีบุคคล
+  const bankDefault = (num(c.vatPct) ? settings.bankCompany || settings.bankPersonal : settings.bankPersonal || settings.bankCompany) || ''
 
   return (
     <ContractForm
@@ -46,6 +48,7 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
         scopeExcluded: c.scopeExcluded ?? '',
         warrantyText: c.warrantyText ?? '',
         note: c.note ?? '',
+        payTo: c.payTo ?? '',
         signDate: c.signDate ?? '',
         dueDate: c.dueDate ?? '',
         installments: insts.map((i) => ({
@@ -63,6 +66,7 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
         employer: q?.custName || cust?.name || cust?.chname || '',
         employerAddr: q?.custAddress || cust?.province || '',
         employerTax: q?.custTaxId || '',
+        bankDefault,
       }}
     />
   )

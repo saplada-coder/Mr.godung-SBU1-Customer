@@ -425,6 +425,8 @@ export const contracts = pgTable(
     scopeExcluded: text('scope_excluded'),
     warrantyText: text('warranty_text'),
     note: text('note'),
+    /** ช่องทางชำระเงินที่พิมพ์ท้ายสัญญา — ว่างไว้ใช้บัญชีจากตั้งค่าบริษัท (เลือกตาม VAT ของฉบับนั้น) */
+    payTo: text('pay_to'),
     signDate: date('sign_date'),
     dueDate: date('due_date'),
     createdBy: integer('created_by').references(() => users.id),
@@ -454,6 +456,26 @@ export const contractInstallments = pgTable(
     note: text('note'),
   },
   (t) => [index('cinst_contract_idx').on(t.contractId)],
+)
+
+/**
+ * เอกสารแนบท้ายสัญญา — รูป (โฉนด แปลนร่าง บัตรประชาชน ฯลฯ) และไฟล์ PDF
+ * เก็บเป็น data URL ในคอลัมน์เดียวเหมือนรูปแนบเอกสารการเงิน ไม่ต้องมี storage แยก
+ * รูปพิมพ์ออกท้ายสัญญาเป็นหน้าแนบ · PDF แนบไว้ให้ดาวน์โหลด พิมพ์ออกเป็นรายชื่อเอกสาร
+ */
+export const contractFiles = pgTable(
+  'contract_files',
+  {
+    id: serial('id').primaryKey(),
+    contractId: integer('contract_id').notNull().references(() => contracts.id, { onDelete: 'cascade' }),
+    name: varchar('name', { length: 200 }).notNull(),
+    mime: varchar('mime', { length: 100 }).notNull(),
+    url: text('url').notNull(),
+    note: varchar('note', { length: 300 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    createdBy: integer('created_by').references(() => users.id),
+  },
+  (t) => [index('contract_files_contract_idx').on(t.contractId)],
 )
 
 /** งานก่อสร้าง — เปิดจากใบเสนอราคาที่ลูกค้าตกลง */

@@ -1,12 +1,12 @@
-import { eq } from 'drizzle-orm'
+import { asc, eq } from 'drizzle-orm'
 import { getDb } from '@/db'
-import { contracts, contractInstallments, quotations, customers } from '@/db/schema'
+import { contracts, contractInstallments, contractFiles, quotations, customers } from '@/db/schema'
 import { getSettingsFor } from '@/lib/settings'
 import { n0, num } from '@/lib/biz'
 import { bahtText, thDateBE, thDateContract } from '@/lib/format'
 import { halfSubs } from '@/lib/constants'
 import { defaultProjectName, defaultSite, defaultEmployerSigner, addDays } from '@/lib/contract-defaults'
-import { fmt, int, subsOf, Cl, SignBlock, CONTRACT_CSS, type SubRow } from './parts'
+import { fmt, int, subsOf, Cl, SignBlock, PayBox, AttachmentPages, CONTRACT_CSS, type SubRow } from './parts'
 import DesignContractDoc from './design'
 
 /**
@@ -41,10 +41,11 @@ export async function loadContract(id: number) {
   const db = getDb()
   const [c] = await db.select().from(contracts).where(eq(contracts.id, id)).limit(1)
   if (!c) return null
-  const [raw, [q], [cust]] = await Promise.all([
+  const [raw, [q], [cust], files] = await Promise.all([
     db.select().from(contractInstallments).where(eq(contractInstallments.contractId, id)),
     db.select().from(quotations).where(eq(quotations.id, c.quotationId)).limit(1),
     db.select().from(customers).where(eq(customers.id, c.customerId)).limit(1),
+    db.select().from(contractFiles).where(eq(contractFiles.contractId, id)).orderBy(asc(contractFiles.id)),
   ])
   const sorted = [...raw].sort((a, b) => a.seq - b.seq)
   // กติกาแตกงวดย่อย 50/50 เป็นของสัญญาก่อสร้างเท่านั้น — สัญญาออกแบบมีสามงวดจ่ายก้อนเดียวทุกงวด
@@ -68,7 +69,7 @@ export async function loadContract(id: number) {
     await db.update(contracts).set(fill).where(eq(contracts.id, id))
     contract = { ...c, ...fill }
   }
-  return { c: contract, insts, q: q ?? null, cust: cust ?? null, settings }
+  return { c: contract, insts, files, q: q ?? null, cust: cust ?? null, settings }
 }
 
 export type ContractDocData = NonNullable<Awaited<ReturnType<typeof loadContract>>>
@@ -80,7 +81,7 @@ export default function ContractDoc({ data, toolbar }: { data: ContractDocData; 
 }
 
 function BuildContractDoc({ data, toolbar }: { data: ContractDocData; toolbar?: React.ReactNode }) {
-  const { c, insts, q, cust, settings: s } = data
+  const { c, insts, files, q, cust, settings: s } = data
 
   const employer = q?.custName || cust?.name || cust?.chname || ''
   const employerAddr = q?.custAddress || cust?.province || ''
@@ -336,6 +337,7 @@ function BuildContractDoc({ data, toolbar }: { data: ContractDocData; toolbar?: 
         <p className="ind">
           สุดท้ายนี้ผู้ว่าจ้าง หวังเป็นอย่างยิ่งว่าผู้รับจ้างจะสามารถดำเนินการได้อย่างมีประสิทธิภาพและสำเร็จตามวัตถุประสงค์ของโครงการต่อไป
         </p>
+        <PayBox payTo={c.payTo} vat={vat} bankCompany={s.bankCompany} bankPersonal={s.bankPersonal} />
         {sign}
       </div>
 
@@ -427,6 +429,8 @@ function BuildContractDoc({ data, toolbar }: { data: ContractDocData; toolbar?: 
         </p>
         {sign}
       </div>
+
+      <AttachmentPages files={files} />
     </div>
   )
 }

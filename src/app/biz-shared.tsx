@@ -130,6 +130,37 @@ export function pickImage(onPicked: (dataUrl: string) => void, onError?: (m: str
   inp.click()
 }
 
+export type PickedFile = { name: string; mime: string; url: string }
+
+/**
+ * ตัวเลือกไฟล์แนบ — รูปถูกบีบอัดเหมือน pickImage ส่วน PDF อ่านตรง ๆ เป็น data URL
+ * เพดานราว 1.5 MB ต่อไฟล์ เท่ากับที่ฝั่ง API รับ (data URL ยาวกว่าไฟล์จริงราวหนึ่งในสาม)
+ */
+export function pickFile(onPicked: (f: PickedFile) => void, onError?: (m: string) => void) {
+  const inp = document.createElement('input')
+  inp.type = 'file'; inp.accept = 'image/*,application/pdf'
+  inp.onchange = async () => {
+    const f = inp.files?.[0]
+    if (!f) return
+    const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name)
+    try {
+      const url = isPdf
+        ? await new Promise<string>((res, rej) => {
+          const fr = new FileReader()
+          fr.onload = () => res(String(fr.result)); fr.onerror = () => rej(fr.error)
+          fr.readAsDataURL(f)
+        })
+        : await fileToDataUrl(f)
+      if (url.length > 2_100_000) {
+        onError?.(isPdf ? 'ไฟล์ PDF ใหญ่เกินไป (รับได้ราว 1.5 MB) ลองบีบอัดหรือแยกไฟล์' : 'รูปใหญ่เกินไป ลองรูปที่เล็กลง')
+        return
+      }
+      onPicked({ name: f.name.slice(0, 200), mime: isPdf ? 'application/pdf' : (url.match(/^data:([^;]+)/)?.[1] ?? f.type), url })
+    } catch { onError?.('อ่านไฟล์ไม่สำเร็จ') }
+  }
+  inp.click()
+}
+
 /* ---------- SVG chart builders (สไตล์เดียวกับกราฟเดิมใน Dashboard) ---------- */
 
 /** กราฟแท่งจับกลุ่ม (งบ vs จ่ายจริง รายหมวด ฯลฯ) */
