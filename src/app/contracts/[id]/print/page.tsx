@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { redirect, notFound } from 'next/navigation'
 import { getSessionUser } from '@/lib/auth'
+import { contractKindMeta } from '@/lib/constants'
 import PrintToolbar from '../../../quotes/[id]/print/toolbar'
 import ContractDoc, { loadContract } from './doc'
 
@@ -14,7 +15,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const data = await loadContract(Number((await params).id))
   if (!data) return { title: 'สัญญา' }
   const who = data.q?.custName || data.cust?.name || data.cust?.chname || ''
-  return { title: ['สัญญา', data.c.code, who].filter(Boolean).join(' ') }
+  // ใส่ชนิดสัญญาในชื่อไฟล์ด้วย เพราะสัญญาออกแบบและสัญญาก่อสร้างของลูกค้ารายเดียวกันใช้เลขที่เดียวกัน
+  return { title: [contractKindMeta(data.c.kind).short, data.c.code, who].filter(Boolean).join(' ') }
 }
 
 export default async function ContractPrintPage({ params }: { params: Promise<{ id: string }> }) {

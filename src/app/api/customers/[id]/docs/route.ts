@@ -49,7 +49,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       trashed: q.deletedAt != null,
     })),
     contracts: ctrs.map((c) => ({
-      id: c.id, code: c.code, status: c.status,
+      id: c.id, code: c.code, status: c.status, kind: c.kind,
       amount: n0(c.contractAmount), signDate: c.signDate, dueDate: c.dueDate,
     })),
     projects: pjs.map((p) => {

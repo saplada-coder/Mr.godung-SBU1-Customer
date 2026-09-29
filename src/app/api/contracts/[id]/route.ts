@@ -64,12 +64,14 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if ('note' in b) p.note = str(b.note, 20000)
   if ('signDate' in b) p.signDate = dateOk(b.signDate)
   if ('dueDate' in b) p.dueDate = dateOk(b.dueDate)
-  for (const k of ['buildDays', 'extendDays', 'startWithinDays', 'payWithinDays', 'warrantyYears'] as const) {
+  for (const k of ['buildDays', 'extendDays', 'startWithinDays', 'payWithinDays', 'warrantyYears', 'designRevisions'] as const) {
     if (k in b) { const v = num(b[k]); p[k] = v == null ? null : Math.max(0, Math.round(v)) }
   }
-  for (const k of ['contractAmount', 'vatPct', 'whtPct', 'penaltyPerDay', 'buildingSqm'] as const) {
+  for (const k of ['contractAmount', 'vatPct', 'whtPct', 'penaltyPerDay', 'buildingSqm', 'projectValue', 'feePct'] as const) {
     if (k in b) p[k] = nstr(num(b[k]))
   }
+  // สัญญาออกแบบ: หักค่าออกแบบคืนถ้าลูกค้าจ้างก่อสร้างต่อหรือไม่ — พิมพ์เป็นข้อ 4.4 เมื่อเปิดไว้
+  if ('creditToBuild' in b) p.creditToBuild = !!b.creditToBuild
   // มูลค่าสัญญาห้ามว่าง — คอลัมน์นี้ NOT NULL และเป็นตัวเลขหลักของทั้งฉบับ
   if (p.contractAmount == null) delete p.contractAmount
 

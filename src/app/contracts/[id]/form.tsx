@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { CONTRACT_STATUSES, contractMeta, halfSubs, isAdminUp, type Role } from '@/lib/constants'
+import { CONTRACT_STATUSES, contractMeta, contractKindMeta, halfSubs, isAdminUp, type Role } from '@/lib/constants'
 import { bahtText } from '@/lib/format'
 import { siteComplete } from '@/lib/contract-defaults'
 import { uiConfirm } from '../../biz-shared'
@@ -9,9 +9,10 @@ import { uiConfirm } from '../../biz-shared'
 export type SubRow = { title: string; amount: number }
 type Inst = { title: string; percent: number | null; amount: number; note: string; subs: SubRow[] }
 export type ContractInit = {
-  id: number; code: string; status: string
+  id: number; code: string; status: string; kind: string
   projectName: string; siteAddress: string; contractorSigner: string; employerSigner: string
   contractAmount: number; vatPct: number; whtPct: number
+  projectValue: number; feePct: number; designRevisions: number; creditToBuild: boolean
   buildDays: number; extendDays: number; startWithinDays: number; payWithinDays: number
   penaltyPerDay: number; workHours: string; warrantyYears: number
   buildingSize: string; buildingSqm: number
@@ -20,7 +21,7 @@ export type ContractInit = {
   installments: Inst[]
 }
 type Ctx = { quoteCode: string; quoteId: number; employer: string; employerAddr: string; employerTax: string }
-type NumKey = 'buildingSqm' | 'buildDays' | 'extendDays' | 'startWithinDays' | 'payWithinDays' | 'penaltyPerDay' | 'warrantyYears'
+type NumKey = 'buildingSqm' | 'buildDays' | 'extendDays' | 'startWithinDays' | 'payWithinDays' | 'penaltyPerDay' | 'warrantyYears' | 'designRevisions'
 
 const money = (n: number) => Math.round(n).toLocaleString('en-US')
 
@@ -30,6 +31,9 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
   const [msg, setMsg] = useState<{ t: string; err?: boolean } | null>(null)
   const admin = isAdminUp(role)
   const locked = f.status === 'ลงนามแล้ว' && !admin
+  /** สัญญาออกแบบ: มูลค่าสัญญาคือค่าออกแบบที่คิดจากมูลค่าโครงการ และไม่มีเรื่องวัสดุ/เวลาทำงาน/การรับประกันงานก่อสร้าง */
+  const design = f.kind === 'ออกแบบ'
+  const kindMeta = contractKindMeta(f.kind)
 
   const set = <K extends keyof ContractInit>(k: K, v: ContractInit[K]) => setF((o) => ({ ...o, [k]: v }))
   const setInst = (i: number, patch: Partial<Inst>) =>
@@ -57,6 +61,18 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
       setMsg({ t: 'เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง', err: true }); return false
     } finally { setBusy(false) }
   }
+
+  /**
+   * ค่าออกแบบ = มูลค่าโครงการ × อัตรา — แก้ช่องใดช่องหนึ่งแล้วยอดสัญญาและทุกงวดขยับตามทันที
+   * งวดของสัญญาออกแบบผูกกับ % (30/40/30) จึงคิดบาทใหม่ให้ทั้งชุด ไม่ต้องไล่แก้เอง
+   */
+  const setFee = (projectValue: number, feePct: number) => setF((o) => {
+    const amount = Math.round(projectValue * feePct / 100)
+    return {
+      ...o, projectValue, feePct, contractAmount: amount,
+      installments: o.installments.map((it) => (it.percent == null ? it : { ...it, amount: Math.round(amount * it.percent / 100) })),
+    }
+  })
 
   /** แตกงวดที่ 2 เป็นต้นไปเป็นสองครึ่งตามฟอร์ม — งวดที่มีงวดย่อยอยู่แล้วจะถูกทับ จึงถามก่อน */
   const splitHalves = async () => {
@@ -90,7 +106,7 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
     <div style={{ maxWidth: 1040, margin: '0 auto', padding: '22px 18px 90px' }}>
       <div className="view-head">
         <div>
-          <h1>ร่างสัญญาว่าจ้างรับเหมาก่อสร้าง</h1>
+          <h1>ร่าง{kindMeta.title}</h1>
           <p>
             เลขที่ {f.code} · จากใบเสนอราคา {ctx.quoteCode} · ผู้ว่าจ้าง {ctx.employer || '—'}
             <span className="qchip" style={{ color: meta.c, background: meta.b, cursor: 'default', marginLeft: 8 }}>{f.status}</span>
@@ -146,13 +162,34 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
         </div>
         {numField('buildingSqm', 'พื้นที่ใช้สอย', 'ตร.ม.')}
 
-        <div className="fs"><div className="fs-t">มูลค่าและภาษี</div></div>
-        <div className="field">
-          <label>มูลค่าสัญญา (Lump Sum, ก่อน VAT)</label>
-          <input type="number" value={String(f.contractAmount)} disabled={locked}
-            onChange={(e) => set('contractAmount', Number(e.target.value) || 0)} />
-          <div className="hintline">({bahtText(f.contractAmount)})</div>
-        </div>
+        <div className="fs"><div className="fs-t">{design ? 'ค่าออกแบบและภาษี' : 'มูลค่าและภาษี'}</div></div>
+        {design ? (
+          <>
+            <div className="field">
+              <label>มูลค่าโครงการ (ฐานคิดค่าออกแบบ)</label>
+              <input type="number" value={String(f.projectValue)} disabled={locked}
+                onChange={(e) => setFee(Number(e.target.value) || 0, f.feePct)} />
+              <div className="hintline">ดึงยอดรวมจากใบเสนอราคา {ctx.quoteCode} — แก้ได้ถ้าตกลงกันคนละยอด</div>
+            </div>
+            <div className="field">
+              <label>อัตราค่าออกแบบ (%) · ค่าออกแบบ</label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input type="number" step="0.01" style={{ width: 90 }} value={String(f.feePct)} disabled={locked}
+                  onChange={(e) => setFee(f.projectValue, Number(e.target.value) || 0)} />
+                <input type="number" value={String(f.contractAmount)} disabled={locked}
+                  onChange={(e) => set('contractAmount', Number(e.target.value) || 0)} />
+              </div>
+              <div className="hintline">แก้มูลค่าโครงการหรืออัตรา ระบบคิดค่าออกแบบและทุกงวดใหม่ให้ · ({bahtText(f.contractAmount)})</div>
+            </div>
+          </>
+        ) : (
+          <div className="field">
+            <label>มูลค่าสัญญา (Lump Sum, ก่อน VAT)</label>
+            <input type="number" value={String(f.contractAmount)} disabled={locked}
+              onChange={(e) => set('contractAmount', Number(e.target.value) || 0)} />
+            <div className="hintline">({bahtText(f.contractAmount)})</div>
+          </div>
+        )}
         <div className="field">
           <label>ภาษีมูลค่าเพิ่ม / หัก ณ ที่จ่าย (%)</label>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -163,18 +200,39 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
         </div>
 
         <div className="fs"><div className="fs-t">ระยะเวลาและเงื่อนไข</div></div>
-        {numField('buildDays', 'ระยะเวลาก่อสร้าง', 'วัน')}
-        {numField('extendDays', 'ขยายเวลาได้ไม่น้อยกว่า', 'วัน')}
-        {numField('startWithinDays', 'เริ่มงานภายใน', 'วัน หลังลงนาม')}
-        {numField('payWithinDays', 'ชำระงวดภายใน', 'วัน หลังตรวจรับ')}
-        {numField('penaltyPerDay', 'ค่าปรับล่าช้า', 'บาท/วัน')}
-        {numField('warrantyYears', 'รับประกันผลงาน', 'ปี')}
+        {design ? (
+          <>
+            {numField('buildDays', 'ระยะเวลาออกแบบ', 'วัน')}
+            {numField('extendDays', 'ขยายเวลาได้ไม่น้อยกว่า', 'วัน')}
+            {numField('payWithinDays', 'ชำระงวดภายใน', 'วัน หลังแจ้งตั้งเบิก')}
+            {numField('penaltyPerDay', 'ค่าปรับส่งแบบล่าช้า', 'บาท/วัน')}
+            {numField('designRevisions', 'แก้ไขแบบร่างฟรี', 'ครั้ง')}
+            <div className="field">
+              <label>หักค่าออกแบบคืนถ้าจ้างก่อสร้างต่อ</label>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 400 }}>
+                <input type="checkbox" checked={f.creditToBuild} disabled={locked} style={{ width: 'auto' }}
+                  onChange={(e) => set('creditToBuild', e.target.checked)} />
+                นำค่าออกแบบที่ชำระแล้วไปหักออกจากค่าก่อสร้างเต็มจำนวน
+              </label>
+              <div className="hintline">เปิดไว้จะพิมพ์เป็นข้อ 4.4 ในสัญญา — ปิดไว้ถ้าไม่ให้หักคืน</div>
+            </div>
+          </>
+        ) : (
+          <>
+            {numField('buildDays', 'ระยะเวลาก่อสร้าง', 'วัน')}
+            {numField('extendDays', 'ขยายเวลาได้ไม่น้อยกว่า', 'วัน')}
+            {numField('startWithinDays', 'เริ่มงานภายใน', 'วัน หลังลงนาม')}
+            {numField('payWithinDays', 'ชำระงวดภายใน', 'วัน หลังตรวจรับ')}
+            {numField('penaltyPerDay', 'ค่าปรับล่าช้า', 'บาท/วัน')}
+            {numField('warrantyYears', 'รับประกันผลงาน', 'ปี')}
+            <div className="field">
+              <label>เวลาทำงาน</label>
+              <input value={f.workHours} disabled={locked} placeholder="08.00 น. ถึง 21.00 น." onChange={(e) => set('workHours', e.target.value)} />
+            </div>
+          </>
+        )}
         <div className="field">
-          <label>เวลาทำงาน</label>
-          <input value={f.workHours} disabled={locked} placeholder="08.00 น. ถึง 21.00 น." onChange={(e) => set('workHours', e.target.value)} />
-        </div>
-        <div className="field">
-          <label>วันลงนาม / วันกำหนดแล้วเสร็จ</label>
+          <label>วันลงนาม / {design ? 'วันกำหนดส่งมอบแบบ' : 'วันกำหนดแล้วเสร็จ'}</label>
           <div style={{ display: 'flex', gap: 8 }}>
             <input type="date" value={f.signDate} disabled={locked} onChange={(e) => set('signDate', e.target.value)} />
             <input type="date" value={f.dueDate} disabled={locked} onChange={(e) => set('dueDate', e.target.value)} />
@@ -183,19 +241,23 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
 
         <div className="fs">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-            <div className="fs-t">งวดงาน (ข้อ 6)</div>
-            {!locked && f.installments.length > 1 && (
+            <div className="fs-t">{design ? 'งวดชำระค่าออกแบบ (ข้อ 4)' : 'งวดงาน (ข้อ 6)'}</div>
+            {!design && !locked && f.installments.length > 1 && (
               <button type="button" className="btn btn-sm" onClick={splitHalves}>แตกครึ่งตั้งแต่งวดที่ 2</button>
             )}
           </div>
-          <div className="hintline">ตามฟอร์มสัญญา งวดที่ 1 เป็นมัดจำก้อนเดียว ตั้งแต่งวดที่ 2 แตกเป็นงวดย่อย N.1 / N.2 อย่างละ 50% (เช่น งวดที่ 2.1, งวดที่ 2.2)</div>
+          <div className="hintline">
+            {design
+              ? 'ค่าออกแบบแบ่งสามงวด: มัดจำ 30% · เสนอแบบร่าง 40% · เขียนแบบเสร็จ 30% — แก้ % ได้ ระบบคิดบาทให้'
+              : 'ตามฟอร์มสัญญา งวดที่ 1 เป็นมัดจำก้อนเดียว ตั้งแต่งวดที่ 2 แตกเป็นงวดย่อย N.1 / N.2 อย่างละ 50% (เช่น งวดที่ 2.1, งวดที่ 2.2)'}
+          </div>
         </div>
         <div className="field full">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {f.installments.map((it, i) => (
               <div key={i} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 11, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-dim)', whiteSpace: 'nowrap', fontWeight: 700 }}>6.1.{i + 1}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-dim)', whiteSpace: 'nowrap', fontWeight: 700 }}>{design ? '4.1' : '6.1'}.{i + 1}</span>
                   <input value={it.title} disabled={locked} placeholder="ชื่องวด เช่น งานฐานราก"
                     onChange={(e) => setInst(i, { title: e.target.value })} style={{ flex: 1 }} />
                   {/* % กับบาทผูกกัน: พิมพ์ % ระบบคิดบาทจากมูลค่าสัญญา · พิมพ์บาท ระบบคิด % กลับให้
@@ -223,7 +285,7 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
                 </div>
                 {it.subs.map((sb, m) => (
                   <div key={m} style={{ display: 'flex', gap: 8, alignItems: 'center', paddingLeft: 26 }}>
-                    <span style={{ fontSize: 12, color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>6.1.{i + 1}.{m + 1}</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>{design ? '4.1' : '6.1'}.{i + 1}.{m + 1}</span>
                     <input value={sb.title} disabled={locked} placeholder={`เช่น งวดที่ ${i + 1}.${m + 1}`} style={{ flex: 1 }}
                       onChange={(e) => setInst(i, { subs: it.subs.map((x, n) => (n === m ? { ...x, title: e.target.value } : x)) })} />
                     {/* % ของงวดหลัก — คิดจากบาทตอนแสดง ไม่เก็บแยก จะได้ไม่มีสองตัวเลขที่ขัดกัน
@@ -268,8 +330,9 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
                 })()}
                 <textarea value={it.note} disabled={locked} placeholder="รายละเอียดงวด (ไม่บังคับ)" rows={2}
                   onChange={(e) => setInst(i, { note: e.target.value })} />
-                {/* งวดที่ 2 ขึ้นไปมี 2 งวดย่อยพอดี — ปุ่มเพิ่มโผล่เฉพาะตอนยังไม่ครบ 2 (เช่น เคยลบออกไว้) ส่วนงวดที่ 1 เพิ่มได้ตามเดิม */}
-                {!locked && (i === 0 || it.subs.length < 2) && (
+                {/* งวดที่ 2 ขึ้นไปมี 2 งวดย่อยพอดี — ปุ่มเพิ่มโผล่เฉพาะตอนยังไม่ครบ 2 (เช่น เคยลบออกไว้) ส่วนงวดที่ 1 เพิ่มได้ตามเดิม
+                    สัญญาออกแบบไม่แตกงวดย่อย — สามงวดจ่ายก้อนเดียวทุกงวด */}
+                {!design && !locked && (i === 0 || it.subs.length < 2) && (
                   <div>
                     <button type="button" className="btn btn-sm"
                       onClick={() => setInst(i, i === 0
@@ -292,19 +355,21 @@ export default function ContractForm({ init, ctx, role }: { init: ContractInit; 
           </div>
         </div>
 
-        <div className="fs"><div className="fs-t">ขอบเขตงานและการรับประกัน</div></div>
+        <div className="fs"><div className="fs-t">{design ? 'ขอบเขตงานออกแบบ' : 'ขอบเขตงานและการรับประกัน'}</div></div>
         <div className="field full">
-          <label>งานที่รวมในงานเหมา — คุณสมบัติวัสดุ (ข้อ 1.1.3)</label>
+          <label>{design ? 'แบบและเอกสารที่ส่งมอบ (ข้อ 1.1)' : 'งานที่รวมในงานเหมา — คุณสมบัติวัสดุ (ข้อ 1.1.3)'}</label>
           <textarea rows={8} value={f.scopeIncluded} disabled={locked} onChange={(e) => set('scopeIncluded', e.target.value)} />
         </div>
         <div className="field full">
-          <label>งานที่ไม่รวมในงานเหมา (ข้อ 1.1.4)</label>
+          <label>{design ? 'งานที่ไม่รวมในสัญญาออกแบบ (ข้อ 1.2)' : 'งานที่ไม่รวมในงานเหมา (ข้อ 1.1.4)'}</label>
           <textarea rows={4} value={f.scopeExcluded} disabled={locked} onChange={(e) => set('scopeExcluded', e.target.value)} />
         </div>
-        <div className="field full">
-          <label>เงื่อนไขการรับประกันเพิ่มเติม (ข้อ 7.1)</label>
-          <textarea rows={4} value={f.warrantyText} disabled={locked} onChange={(e) => set('warrantyText', e.target.value)} />
-        </div>
+        {!design && (
+          <div className="field full">
+            <label>เงื่อนไขการรับประกันเพิ่มเติม (ข้อ 7.1)</label>
+            <textarea rows={4} value={f.warrantyText} disabled={locked} onChange={(e) => set('warrantyText', e.target.value)} />
+          </div>
+        )}
         <div className="field full">
           <label>หมายเหตุท้ายสัญญา</label>
           <textarea rows={3} value={f.note} disabled={locked} onChange={(e) => set('note', e.target.value)} />

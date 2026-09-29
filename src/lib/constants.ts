@@ -154,6 +154,27 @@ export const CONTRACT_STATUSES: string[] = CONTRACT_DOCS.map((x) => x.k)
 export type ContractStatus = (typeof CONTRACT_DOCS)[number]['k']
 export const contractMeta = (s: string) => CONTRACT_DOCS.find((x) => x.k === s) ?? CONTRACT_DOCS[0]
 
+/**
+ * ชนิดสัญญา — ลูกค้าเลือกจ้างออกแบบก่อนได้ แล้วค่อยจ้างก่อสร้างทีหลัง
+ * ใบเสนอราคาใบเดียวร่างได้ทั้งสองชนิด ชนิดละหนึ่งฉบับ
+ */
+export const CONTRACT_KINDS = [
+  { k: 'ก่อสร้าง', title: 'สัญญาว่าจ้างรับเหมาก่อสร้าง', short: 'สัญญาก่อสร้าง', draft: 'ร่างสัญญาก่อสร้าง' },
+  { k: 'ออกแบบ', title: 'สัญญาว่าจ้างออกแบบ', short: 'สัญญาออกแบบ', draft: 'ร่างสัญญาออกแบบ' },
+] as const
+export const CONTRACT_KIND_KEYS: string[] = CONTRACT_KINDS.map((x) => x.k)
+export type ContractKind = (typeof CONTRACT_KINDS)[number]['k']
+export const contractKindMeta = (k: string) => CONTRACT_KINDS.find((x) => x.k === k) ?? CONTRACT_KINDS[0]
+
+/** ค่าออกแบบคิด 10% ของมูลค่าโครงการ แบ่งชำระสามงวดตามความคืบหน้าของแบบ */
+export const DESIGN_FEE_PCT = 10
+export const DESIGN_REVISIONS = 2
+export const DESIGN_INSTALLMENTS: { title: string; percent: number; note: string }[] = [
+  { title: 'มัดจำ เมื่อลงนามสัญญาออกแบบ', percent: 30, note: '- เริ่มงานสำรวจพื้นที่และออกแบบแนวความคิด' },
+  { title: 'เมื่อเสนอแบบร่าง', percent: 40, note: '- เสนอแบบร่าง (ผัง รูปด้าน ทัศนียภาพ 3D) ให้ผู้ว่าจ้างพิจารณา' },
+  { title: 'เมื่อเขียนแบบเสร็จ', percent: 30, note: '- ส่งมอบแบบก่อสร้างพร้อมใช้ยื่นขออนุญาต' },
+]
+
 /** สถานะงานก่อสร้าง + สี */
 export const PROJECT_STAGES = [
   { k: 'กำลังก่อสร้าง', c: '#2563c9', b: '#d9e8fb' },

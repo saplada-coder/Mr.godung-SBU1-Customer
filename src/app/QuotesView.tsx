@@ -351,14 +351,19 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, onOpenCu
     if (r.ok) { showToast('เปิดงานก่อสร้าง ' + j.code + ' แล้ว'); onChanged(); onClose(); onOpenProject(j.id) }
     else showToast(j.error || 'เปิดงานไม่สำเร็จ')
   }
-  /** ร่างสัญญาจากใบนี้ — กดซ้ำได้ฉบับเดิม ไม่สร้างซ้ำ แล้วเปิดหน้าร่างสัญญาไว้แก้ต่อ */
-  const draftContract = async () => {
+  /**
+   * ร่างสัญญาจากใบนี้ — กดซ้ำได้ฉบับเดิม ไม่สร้างซ้ำ แล้วเปิดหน้าร่างสัญญาไว้แก้ต่อ
+   * ใบเดียวมีได้ทั้งสัญญาออกแบบ (ค่าออกแบบ 10% ของมูลค่าโครงการ) และสัญญาก่อสร้าง ชนิดละหนึ่งฉบับ
+   */
+  const draftContract = async (kind: 'ก่อสร้าง' | 'ออกแบบ') => {
     setBusy(true)
-    const r = await fetch(`/api/quotes/${id}/contract`, { method: 'POST' })
+    const r = await fetch(`/api/quotes/${id}/contract`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind }),
+    })
     setBusy(false)
-    const j = await r.json()
+    const j = await r.json().catch(() => ({}))
     if (!r.ok) { showToast(j.error || 'ร่างสัญญาไม่สำเร็จ'); return }
-    showToast(j.existed ? 'เปิดร่างสัญญาเดิมของใบนี้' : 'ร่างสัญญาจากใบนี้แล้ว')
+    showToast(j.existed ? `เปิดร่างสัญญา${kind}เดิมของใบนี้` : `ร่างสัญญา${kind}จากใบนี้แล้ว`)
     window.open(`/contracts/${j.id}`, '_blank')
   }
   /** มาร์กว่าส่งลูกค้าแล้ว — บันทึกก่อนอัตโนมัติถ้ายังแก้ไขอยู่ (flow ไม่มีขั้นอนุมัติภายใน) */
@@ -601,7 +606,13 @@ export function QuoteModal({ id, me, onClose, onChanged, onOpenProject, onOpenCu
             </>
           )}
           {quote.status === 'ส่งลูกค้าแล้ว' && (mine || admin) && <button className="btn" style={{ color: '#b0281c' }} disabled={busy} onClick={() => action('cancel', {}, 'ยกเลิกใบเสนอราคานี้?')}>ยกเลิกใบ</button>}
-          {quote.status === 'ลูกค้าตกลง' && <button className="btn" disabled={busy} onClick={draftContract}>📄 ร่างสัญญา</button>}
+          {quote.status === 'ลูกค้าตกลง' && (
+            <>
+              <button className="btn" disabled={busy} onClick={() => draftContract('ก่อสร้าง')}>📄 ร่างสัญญาก่อสร้าง</button>
+              <button className="btn" disabled={busy} title="ค่าออกแบบ 10% ของมูลค่าโครงการ · มัดจำ 30% / เสนอแบบร่าง 40% / เขียนแบบเสร็จ 30%"
+                onClick={() => draftContract('ออกแบบ')}>📐 ร่างสัญญาออกแบบ</button>
+            </>
+          )}
           {quote.status === 'ลูกค้าตกลง' && !quote.projectId && admin && <button className="btn btn-primary" disabled={busy} onClick={openProject}>🏗 เปิดงานก่อสร้าง</button>}
         </div>
       </div>

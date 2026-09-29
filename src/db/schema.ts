@@ -10,9 +10,10 @@ import {
   boolean,
   serial,
   index,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
-import type { ContractStatus, KfStatus } from '@/lib/constants'
+import type { ContractStatus, ContractKind, KfStatus } from '@/lib/constants'
 
 /* ---- Enums (สั้น/ASCII พอที่จะเป็น pg enum ได้) ---- */
 export const buEnum = pgEnum('bu', ['BU1', 'BU2', 'BU3', 'BU4', 'BU5', 'BU6', 'BU7'])
@@ -385,9 +386,11 @@ export const contracts = pgTable(
   'contracts',
   {
     id: serial('id').primaryKey(),
-    quotationId: integer('quotation_id').notNull().unique().references(() => quotations.id, { onDelete: 'cascade' }),
+    quotationId: integer('quotation_id').notNull().references(() => quotations.id, { onDelete: 'cascade' }),
     customerId: integer('customer_id').notNull().references(() => customers.id, { onDelete: 'cascade' }),
     code: varchar('code', { length: 40 }).notNull(),
+    /** ชนิดสัญญา — ใบเสนอราคาหนึ่งใบร่างได้ชนิดละหนึ่งฉบับ (ออกแบบก่อน แล้วค่อยก่อสร้าง) */
+    kind: varchar('kind', { length: 20 }).$type<ContractKind>().notNull().default('ก่อสร้าง'),
     status: varchar('status', { length: 20 }).$type<ContractStatus>().notNull().default('ร่าง'),
     /** หัวสัญญา: ชื่อโครงการ + ที่ตั้งหน้างาน (ตำบล/อำเภอ/จังหวัด) — ใบเสนอราคาไม่มีเก็บไว้ */
     projectName: varchar('project_name', { length: 200 }),
@@ -396,8 +399,14 @@ export const contracts = pgTable(
     contractorSigner: varchar('contractor_signer', { length: 120 }),
     /** ผู้ลงนามฝ่ายผู้ว่าจ้าง — ลูกค้าบุคคลคือตัวลูกค้าเอง ลูกค้านิติบุคคลคือกรรมการผู้มีอำนาจ */
     employerSigner: varchar('employer_signer', { length: 120 }),
-    /** มูลค่าสัญญา (Lump Sum) ก่อน VAT */
+    /** มูลค่าสัญญา (Lump Sum) ก่อน VAT — สัญญาออกแบบคือค่าออกแบบ ไม่ใช่มูลค่าโครงการ */
     contractAmount: numeric('contract_amount', { precision: 14, scale: 2 }).notNull(),
+    /** สัญญาออกแบบ: มูลค่าโครงการที่ใช้เป็นฐานคิดค่าออกแบบ + อัตราค่าออกแบบ (ปกติ 10%) */
+    projectValue: numeric('project_value', { precision: 14, scale: 2 }),
+    feePct: numeric('fee_pct', { precision: 5, scale: 2 }),
+    /** สัญญาออกแบบ: แก้ไขแบบร่างได้กี่ครั้งโดยไม่คิดเงิน · และหักค่าออกแบบคืนถ้าจ้างก่อสร้างต่อหรือไม่ */
+    designRevisions: integer('design_revisions'),
+    creditToBuild: boolean('credit_to_build').notNull().default(false),
     vatPct: numeric('vat_pct', { precision: 5, scale: 2 }),
     /** ภาษีหัก ณ ที่จ่าย — 0 = ไม่หัก (ตามฟอร์มสัญญาข้อ 6.2) */
     whtPct: numeric('wht_pct', { precision: 5, scale: 2 }),
@@ -422,7 +431,11 @@ export const contracts = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('contracts_customer_idx').on(t.customerId)],
+  (t) => [
+    index('contracts_customer_idx').on(t.customerId),
+    // ชนิดละหนึ่งฉบับต่อใบเสนอราคา — กันร่างซ้ำ แต่ยังให้ใบเดียวมีทั้งสัญญาออกแบบและสัญญาก่อสร้างได้
+    uniqueIndex('contracts_quote_kind_uq').on(t.quotationId, t.kind),
+  ],
 )
 
 /** งวดงานในสัญญา (ข้อ 6) — ตั้งต้นจากงวดของใบเสนอราคา แล้วแก้แยกได้ */

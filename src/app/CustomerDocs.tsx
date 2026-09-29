@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { BU_NAMES, qdocMeta, projMeta, contractMeta, billKindMeta } from '@/lib/constants'
+import { BU_NAMES, qdocMeta, projMeta, contractMeta, contractKindMeta, billKindMeta } from '@/lib/constants'
 import { commas, fmtPhone, thDate } from '@/lib/format'
 
 /**
@@ -11,7 +11,7 @@ import { commas, fmtPhone, thDate } from '@/lib/format'
  */
 
 type Quote = { id: number; code: string; rev: number; status: string; issueDate: string | null; validUntil: string | null; grand: number; trashed: boolean }
-type Contract = { id: number; code: string; status: string; amount: number; signDate: string | null; dueDate: string | null }
+type Contract = { id: number; code: string; status: string; kind: string; amount: number; signDate: string | null; dueDate: string | null }
 type Project = { id: number; code: string; name: string; status: string; contractAmount: number; dueDate: string | null; received: number; instDone: number; instTotal: number; trashed: boolean }
 type Bill = { id: number; kind: string; code: string; issueDate: string | null; total: number; status: string; projectId: number; projectName: string | null }
 type Cust = { id: number; code: string; bu: string; name: string | null; chname: string | null; phone: string | null; province: string | null; status: string; quoteStatus: string }
@@ -81,7 +81,8 @@ export default function CustomerDocsModal({ customerId, onClose }: { customerId:
                   return (
                     <Row key={c.id}
                       rail={m.c}
-                      title={<>{c.code} {chip(m.k, m.c, m.b)}</>}
+                      // เลขที่สัญญาเป็นรหัสลูกค้า ลูกค้ารายเดียวมีได้ทั้งสัญญาออกแบบและสัญญาก่อสร้าง — ต้องบอกชนิดไม่ให้สองแถวดูเหมือนกัน
+                      title={<>{c.code} · {contractKindMeta(c.kind).short} {chip(m.k, m.c, m.b)}</>}
                       sub={`${c.signDate ? 'ลงนาม ' + thDate(c.signDate) : 'ยังไม่ระบุวันลงนาม'}${c.dueDate ? ' · แล้วเสร็จ ' + thDate(c.dueDate) : ''}`}
                       right={`฿${commas(c.amount)}`}
                       onOpen={() => open(`/contracts/${c.id}`)} />
